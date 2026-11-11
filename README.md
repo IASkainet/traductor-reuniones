@@ -13,6 +13,7 @@ Solo guarda texto, nunca audio. No usa cuentas, claves ni servicios de pago.
    ```
 
 2. Abre **Google Chrome** (no otro navegador) y entra en <http://localhost:8000>.
+   Ojo: el panel de navegador que trae la app de Claude no vale; ahí no funcionan ni el micrófono ni la traducción.
 3. Deja la terminal abierta mientras uses la app. Para apagarla, pulsa `Ctrl + C` en la terminal.
 
 No instala ni descarga nada: usa el Python que ya tiene el PC.

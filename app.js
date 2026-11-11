@@ -61,6 +61,13 @@ let ultimoArranque = 0;
 let fallosSeguidos = 0;
 let tempReinicio = null;
 
+// ¿Es Google Chrome de verdad? Otros navegadores parecidos (por ejemplo el panel de
+// navegador de la app de Claude) no dejan usar el micrófono ni traen el traductor.
+const esChromeDeVerdad = !!(navigator.userAgentData
+  && navigator.userAgentData.brands.some((m) => m.brand === 'Google Chrome'));
+const AVISO_NO_ES_CHROME =
+  `Esta página no está abierta en Google Chrome, y aquí el micrófono no funciona. Abre el programa Google Chrome y escribe ${location.origin} en su barra de direcciones.`;
+
 // ---------- Utilidades ----------
 const dos = (n) => String(n).padStart(2, '0');
 const nombreOrigen = () => el.selOrigen.selectedOptions[0].textContent.trim();
@@ -425,7 +432,9 @@ function arrancarReconocimiento() {
         break;
       case 'not-allowed':
       case 'service-not-allowed':
-        pararPorError('Chrome no tiene permiso para usar el micrófono. Pulsa el icono que hay a la izquierda de la dirección, permite el micrófono y vuelve a pulsar Iniciar.');
+        pararPorError(esChromeDeVerdad
+          ? 'Chrome no tiene permiso para usar el micrófono. En la barra de direcciones, pulsa el icono que hay justo a la izquierda de «localhost:8000», activa «Micrófono» y vuelve a pulsar Iniciar.'
+          : AVISO_NO_ES_CHROME);
         break;
       case 'audio-capture':
         pararPorError('No se encuentra ningún micrófono. Conecta uno y vuelve a pulsar Iniciar.');
@@ -625,6 +634,8 @@ window.addEventListener('pagehide', guardarCopia);
 
 if (!(window.SpeechRecognition || window.webkitSpeechRecognition)) {
   mostrarMensaje('Este navegador no tiene reconocimiento de voz: solo funcionará el modo de prueba. Usa Google Chrome.');
+} else if (!esChromeDeVerdad) {
+  mostrarMensaje(AVISO_NO_ES_CHROME);
 }
 ofrecerRecuperacion();
 actualizarControles();
