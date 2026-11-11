@@ -10,6 +10,17 @@ const GUARDAR_CADA_MS = 3000;                   // cada cuánto se guarda
 const ESPERA_TRAD_PROVISIONAL_MS = 400;         // retardo antes de traducir el texto en gris
 const ESPERA_COMPROBACION_MS = 8000;            // tope de espera al comprobar el traductor
 const REINTENTOS_TRADUCTOR = 3;                 // reintentos si falla al preparar el traductor
+const CLAVE_MODELO = 'traductorReuniones.modelo.'; // recuerda qué traductores ya se descargaron
+const LIMITE_TRAD_PROVISIONAL_MS = 700;         // si el traductor del móvil tarda más, no traduce el gris
+
+// Pares de idiomas con traductor para usar dentro del dispositivo (modelos Opus-MT).
+const MODELOS_DISPONIBLES = [
+  'fr-es', 'fr-en', 'fr-de', 'en-es', 'en-fr', 'en-de', 'en-it', 'de-es', 'de-en',
+  'de-fr', 'it-es', 'it-en', 'it-fr', 'es-en', 'es-fr', 'es-de', 'es-it',
+];
+
+// En Android el reconocimiento de voz de Chrome se comporta distinto y hay que tratarlo aparte.
+const esAndroid = /Android/i.test(navigator.userAgent);
 
 // ---------- Elementos de la página ----------
 const $ = (id) => document.getElementById(id);
@@ -60,6 +71,8 @@ let quiereEscuchar = false;    // true desde Iniciar hasta Parar
 let ultimoArranque = 0;
 let fallosSeguidos = 0;
 let tempReinicio = null;
+let esperaVolver = false;      // en el móvil: la escucha se cortó con la página oculta
+let bloqueoPantalla = null;    // mantiene la pantalla encendida mientras se escucha
 
 // ¿Es Google Chrome de verdad? Otros navegadores parecidos (por ejemplo el panel de
 // navegador de la app de Claude) no dejan usar el micrófono ni traen el traductor.
@@ -222,7 +235,8 @@ function sinTraductor(motivo, reintentable = false) {
 
 // Comprueba si Chrome puede traducir el par de idiomas elegido y lo deja listo.
 // Si hay que descargar el modelo, Chrome exige que sea tras un clic del usuario.
-async function prepararTraductor(intento = 0) {
+// Donde no hay traductor de Chrome (Android), se usa el modelo que funciona en el dispositivo.
+async function prepararTraductor(intento = 0, descargaPedida = false) {
   const turno = ++turnoTraductor;
   const origen = codigoOrigen();
   const destino = el.selDestino.value;
@@ -233,11 +247,11 @@ async function prepararTraductor(intento = 0) {
     traductor = null;
   }
 
-  if (!('Translator' in self)) {
-    return sinTraductor('Este navegador no trae traductor integrado (hace falta Chrome 138 o superior en ordenador).');
-  }
   if (origen === destino) {
     return sinTraductor('El idioma de origen y el de destino son el mismo.');
+  }
+  if (!('Translator' in self)) {
+    return prepararModelo(turno, origen, destino, par, descargaPedida);
   }
 
   pintarEstadoTraductor('comprobando', `Comprobando el traductor ${par}…`);
@@ -253,11 +267,8 @@ async function prepararTraductor(intento = 0) {
     disponibilidad = 'unavailable';
   }
   if (turno !== turnoTraductor) return;
-  if (disponibilidad === 'sin-respuesta') {
-    return sinTraductor('El traductor integrado de este navegador no responde.', true);
-  }
-  if (disponibilidad === 'unavailable') {
-    return sinTraductor(`Chrome no ofrece traducción ${par} en este equipo.`);
+  if (disponibilidad === 'sin-respuesta' || disponibilidad === 'unavailable') {
+    return prepararModelo(turno, origen, destino, par, descargaPedida);
   }
 
   const hayQueDescargar = disponibilidad !== 'available';
@@ -306,6 +317,101 @@ async function prepararTraductor(intento = 0) {
   }
 }
 
+// ---------- Traducción dentro del dispositivo (Android y navegadores sin traductor) ----------
+
+// Deja listo el modelo de traducción que funciona en el propio dispositivo.
+// La primera vez hay que descargarlo (unos 120 MB) y solo se hace si se pide con el botón.
+async function prepararModelo(turno, origen, destino, par, descargaPedida) {
+  const clave = `${origen}-${destino}`;
+  if (!MODELOS_DISPONIBLES.includes(clave)) {
+    return sinTraductor(`En este navegador no hay traductor ${par}.`);
+  }
+  let yaDescargado = false;
+  try { yaDescargado = localStorage.getItem(CLAVE_MODELO + clave) === '1'; } catch { /* sin memoria */ }
+  if (!yaDescargado && !descargaPedida) {
+    return pintarEstadoTraductor('descargable',
+      `Para traducir ${par} aquí hay que descargar una vez un traductor de unos 120 MB (mejor con wifi).`);
+  }
+
+  const verbo = yaDescargado ? 'Preparando' : 'Descargando';
+  pintarEstadoTraductor('descargando', `${verbo} el traductor ${par}…`, yaDescargado ? null : 0);
+  try {
+    const nuevo = await crearTraductorEnDispositivo(origen, destino, (parte) => {
+      if (turno !== turnoTraductor) return;
+      pintarEstadoTraductor('descargando', `${verbo} el traductor ${par}… ${Math.round(parte * 100)} %`, parte);
+    });
+    if (turno !== turnoTraductor) {
+      nuevo.destroy();
+      return;
+    }
+    try { localStorage.setItem(CLAVE_MODELO + clave, '1'); } catch { /* sin memoria */ }
+    traductor = nuevo;
+    pintarEstadoTraductor('listo', `Traductor ${par} listo (traduce dentro de este dispositivo).`);
+    traducirPendientes();
+  } catch (e) {
+    if (turno !== turnoTraductor) return;
+    console.warn('No se pudo cargar el traductor del dispositivo:', e);
+    sinTraductor(`No se ha podido cargar el traductor ${par}.`, true);
+  }
+}
+
+// Arranca el traductor en un hilo aparte y devuelve un objeto con la misma forma
+// que el traductor de Chrome: translate(texto) y destroy().
+function crearTraductorEnDispositivo(origen, destino, alProgresar) {
+  return new Promise((resolver, rechazar) => {
+    const hilo = new Worker('traductor-movil.js', { type: 'module' });
+    const pendientes = new Map();
+    let siguiente = 1;
+    let listo = false;
+
+    const api = {
+      enDispositivo: true,
+      ultimaDuracion: 0, // lo que tardó la última traducción, en milisegundos
+      translate(texto) {
+        return new Promise((ok, mal) => {
+          const id = siguiente++;
+          pendientes.set(id, { ok, mal });
+          hilo.postMessage({ tipo: 'traducir', id, texto });
+        });
+      },
+      destroy() {
+        hilo.terminate();
+        for (const p of pendientes.values()) p.mal(new Error('Traductor cerrado'));
+        pendientes.clear();
+      },
+    };
+
+    const fallar = (mensaje) => {
+      if (listo) return;
+      hilo.terminate();
+      rechazar(new Error(mensaje));
+    };
+    hilo.onerror = (e) => fallar(e.message || 'No se pudo cargar el traductor');
+    hilo.onmessage = (e) => {
+      const m = e.data;
+      if (m.tipo === 'progreso') {
+        alProgresar(m.parte);
+      } else if (m.tipo === 'listo') {
+        listo = true;
+        resolver(api);
+      } else if (m.tipo === 'error') {
+        fallar(m.mensaje);
+      } else if (m.tipo === 'traduccion') {
+        const p = pendientes.get(m.id);
+        pendientes.delete(m.id);
+        if (!p) return;
+        if (m.error) {
+          p.mal(new Error(m.error));
+        } else {
+          api.ultimaDuracion = m.ms;
+          p.ok(m.texto);
+        }
+      }
+    };
+    hilo.postMessage({ tipo: 'cargar', origen, destino });
+  });
+}
+
 function traducirPendientes() {
   for (const seg of segmentos) {
     if (seg.traduccion == null && !cola.includes(seg)) cola.push(seg);
@@ -346,6 +452,8 @@ async function traducirProvisional() {
   tempProv = null;
   const fila = filaProv;
   if (!fila || !traductor || traduciendoProv) return;
+  // Si el traductor del dispositivo va lento, no se le carga con el texto gris.
+  if (traductor.enDispositivo && traductor.ultimaDuracion > LIMITE_TRAD_PROVISIONAL_MS) return;
   if (procesandoCola) return programarTradProvisional();
   const texto = fila.texto;
   traduciendoProv = true;
@@ -368,7 +476,27 @@ function pintarEscucha(estado) {
     estado === 'escuchando' ? 'Escuchando' : estado === 'reconectando' ? 'Reconectando…' : 'Parado';
   el.btnEscuchar.textContent = quiereEscuchar ? 'Parar' : 'Iniciar';
   el.btnEscuchar.classList.toggle('activo', quiereEscuchar);
+  document.body.classList.toggle('escuchando', quiereEscuchar); // en el móvil esconde lo que no hace falta
   actualizarControles();
+}
+
+// Evita que la pantalla se apague sola mientras se escucha (en el móvil cortaría la escucha).
+async function mantenerPantallaEncendida() {
+  if (!('wakeLock' in navigator) || bloqueoPantalla || document.hidden) return;
+  try {
+    const bloqueo = await navigator.wakeLock.request('screen');
+    bloqueoPantalla = bloqueo;
+    bloqueo.addEventListener('release', () => {
+      if (bloqueoPantalla === bloqueo) bloqueoPantalla = null;
+    });
+    if (!quiereEscuchar) soltarPantalla();
+  } catch { /* si no se puede, se sigue igual */ }
+}
+
+function soltarPantalla() {
+  if (!bloqueoPantalla) return;
+  bloqueoPantalla.release().catch(() => {});
+  bloqueoPantalla = null;
 }
 
 function iniciarEscucha() {
@@ -380,17 +508,21 @@ function iniciarEscucha() {
   ocultarMensaje();
   quiereEscuchar = true;
   fallosSeguidos = 0;
+  esperaVolver = false;
   pintarEscucha('reconectando');
   arrancarReconocimiento();
+  mantenerPantallaEncendida();
   if (estadoTrad === 'descargable') prepararTraductor();
 }
 
 function pararEscucha() {
   quiereEscuchar = false;
+  esperaVolver = false;
   clearTimeout(tempReinicio);
   if (rec) {
     try { rec.stop(); } catch { /* ya estaba parado */ }
   }
+  soltarPantalla();
   pintarEscucha('parado');
 }
 
@@ -405,9 +537,14 @@ function arrancarReconocimiento() {
   const este = new Reconocimiento();
   rec = este;
   este.lang = el.selOrigen.value;
-  este.continuous = true;
+  // En Android el modo continuo de Chrome repite el texto: se escucha frase a frase
+  // y se vuelve a arrancar al terminar cada una.
+  este.continuous = !esAndroid;
   este.interimResults = true;
   este.maxAlternatives = 1;
+
+  let huboResultado = false;
+  let ultimoConfirmado = ''; // para no repetir una frase que Android manda dos veces
 
   este.onstart = () => {
     if (rec === este && quiereEscuchar) pintarEscucha('escuchando');
@@ -415,12 +552,22 @@ function arrancarReconocimiento() {
 
   este.onresult = (e) => {
     if (rec !== este) return;
+    huboResultado = true;
     let provisional = '';
     for (let i = e.resultIndex; i < e.results.length; i++) {
       const r = e.results[i];
-      if (r.isFinal) confirmarFrase(r[0].transcript);
-      else provisional += r[0].transcript;
+      const texto = r[0].transcript;
+      // Chrome en Android marca como definitivos textos que aún son provisionales
+      // (se distinguen porque llegan con confianza 0).
+      const definitivo = r.isFinal && !(esAndroid && r[0].confidence === 0);
+      if (!definitivo) {
+        provisional += texto;
+      } else if (!(esAndroid && texto.trim() === ultimoConfirmado)) {
+        ultimoConfirmado = texto.trim();
+        confirmarFrase(texto);
+      }
     }
+    if (esAndroid && provisional.trim() === ultimoConfirmado) provisional = '';
     mostrarProvisional(provisional);
   };
 
@@ -432,8 +579,11 @@ function arrancarReconocimiento() {
         break;
       case 'not-allowed':
       case 'service-not-allowed':
+        // En el móvil, con la pantalla apagada o en otra app, Chrome corta el micrófono:
+        // no es un problema de permisos y se reanuda al volver.
+        if (esAndroid && document.hidden) break;
         pararPorError(esChromeDeVerdad
-          ? 'Chrome no tiene permiso para usar el micrófono. En la barra de direcciones, pulsa el icono que hay justo a la izquierda de «localhost:8000», activa «Micrófono» y vuelve a pulsar Iniciar.'
+          ? `Chrome no tiene permiso para usar el micrófono. En la barra de direcciones, pulsa el icono que hay justo a la izquierda de «${location.host}», activa «Micrófono» y vuelve a pulsar Iniciar.`
           : AVISO_NO_ES_CHROME);
         break;
       case 'audio-capture':
@@ -450,8 +600,8 @@ function arrancarReconocimiento() {
     }
   };
 
-  // Chrome corta tras un silencio o cada cierto tiempo: se vuelve a arrancar
-  // mientras no se haya pulsado Parar. El texto ya capturado no se toca.
+  // Chrome corta tras un silencio o cada cierto tiempo (en Android, tras cada frase):
+  // se vuelve a arrancar mientras no se haya pulsado Parar. El texto ya capturado no se toca.
   este.onend = () => {
     if (rec !== este) return;
     if (filaProv) confirmarFrase(filaProv.texto); // lo que quedó en gris no se pierde
@@ -460,9 +610,14 @@ function arrancarReconocimiento() {
       return;
     }
     pintarEscucha('reconectando');
+    if (esAndroid && document.hidden) {
+      esperaVolver = true; // se reanuda al volver a la página (ver más abajo)
+      return;
+    }
     const duracion = Date.now() - ultimoArranque;
-    fallosSeguidos = duracion < 2000 ? fallosSeguidos + 1 : 0;
-    const espera = Math.min(250 * 2 ** fallosSeguidos, 5000); // si falla seguido, espera más
+    fallosSeguidos = duracion < 2000 && !huboResultado ? fallosSeguidos + 1 : 0;
+    const base = esAndroid ? 100 : 250;
+    const espera = Math.min(base * 2 ** fallosSeguidos, 5000); // si falla seguido, espera más
     tempReinicio = setTimeout(() => {
       if (quiereEscuchar) arrancarReconocimiento();
     }, espera);
@@ -477,6 +632,16 @@ function arrancarReconocimiento() {
     pararPorError('No se ha podido arrancar el reconocimiento de voz. Vuelve a pulsar Iniciar.');
   }
 }
+
+// Al volver a la página (móvil desbloqueado, vuelta desde otra app) se retoma lo que se cortó.
+document.addEventListener('visibilitychange', () => {
+  if (document.hidden || !quiereEscuchar) return;
+  mantenerPantallaEncendida();
+  if (esperaVolver) {
+    esperaVolver = false;
+    arrancarReconocimiento();
+  }
+});
 
 // ---------- Copia de seguridad (localStorage) ----------
 
@@ -620,7 +785,7 @@ function probarTexto() {
 // ---------- Arranque ----------
 
 el.btnEscuchar.addEventListener('click', () => (quiereEscuchar ? pararEscucha() : iniciarEscucha()));
-el.btnPrepararTraductor.addEventListener('click', () => prepararTraductor());
+el.btnPrepararTraductor.addEventListener('click', () => prepararTraductor(0, true));
 el.selOrigen.addEventListener('change', () => { actualizarControles(); prepararTraductor(); });
 el.selDestino.addEventListener('change', () => { actualizarControles(); prepararTraductor(); });
 el.btnDescargar.addEventListener('click', descargarMarkdown);

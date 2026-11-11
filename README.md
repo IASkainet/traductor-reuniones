@@ -18,6 +18,31 @@ Solo guarda texto, nunca audio. No usa cuentas, claves ni servicios de pago.
 
 No instala ni descarga nada: usa el Python que ya tiene el PC.
 
+## Versión para móvil Android
+
+No hace falta el PC: la misma app está publicada en <https://iaskainet.github.io/traductor-reuniones/>. Ábrela con **Chrome** en el móvil.
+
+**La primera vez (hazlo con wifi, antes de la reunión)**
+
+1. Pulsa «Descargar traductor». Baja una vez un traductor de unos 120 MB que funciona dentro del móvil; espera a que ponga «listo».
+2. Pulsa **Iniciar** y acepta el permiso de micrófono.
+3. Baja el volumen multimedia del móvil: Android pita cada vez que el micrófono se vuelve a conectar.
+
+**Cómo se ve**
+
+- Móvil en vertical: cada frase con su traducción debajo (marcada con una raya verde).
+- Móvil tumbado: las dos mitades, como en el PC.
+- Mientras escucha se esconden los selectores y botones para dejar sitio al texto; vuelven al pulsar Parar.
+
+**Diferencias con el PC**
+
+- La traducción no usa el traductor de Chrome (no existe en Android), sino un modelo abierto (Opus-MT) que se ejecuta en el propio móvil. El texto no sale del teléfono. Es algo más lento y traduce un poco distinto.
+- En Android el micrófono se corta al final de cada frase y se vuelve a conectar solo. En ese instante puede perderse alguna palabra.
+- La pantalla se mantiene encendida mientras escucha. Si bloqueas el móvil o cambias de app, la escucha se detiene y se reanuda al volver.
+- No hay portugués en el móvil (no existe ese modelo).
+
+Para publicar un cambio hecho en esta carpeta: `git push` (tarda unos minutos en verse en el móvil).
+
 ## Cómo probarlo
 
 **Sin micrófono (modo de prueba)**
@@ -46,7 +71,7 @@ Chrome tiene que descargar el paquete de traducción. Pulsa «Descargar traducto
 
 ## Limitaciones conocidas
 
-- **Solo Chrome de ordenador, versión 138 o superior.** En Chrome para Android no existe el traductor integrado.
+- **Solo Chrome** (versión 138 o superior en ordenador). En Android funciona con otro traductor; ver «Versión para móvil Android».
 - **Necesita Internet para escuchar**: el reconocimiento de voz envía el audio a Google. La traducción, en cambio, se hace dentro del PC.
 - **Cortes**: Chrome para el reconocimiento tras un silencio o cada cierto tiempo. La app lo reinicia sola, pero en ese instante puede perderse alguna palabra.
 - **«Frases»**: Chrome decide dónde termina cada trozo según las pausas, y a menudo sin puntuación. Cada fila es un trozo de habla, no siempre una frase completa.
@@ -60,3 +85,4 @@ Chrome tiene que descargar el paquete de traducción. Pulsa «Descargar traducto
 - `index.html`: la página.
 - `estilos.css`: el aspecto.
 - `app.js`: la lógica (escucha, traducción, copia de seguridad y descarga).
+- `traductor-movil.js`: el traductor que funciona dentro del dispositivo (Android).

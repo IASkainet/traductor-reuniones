@@ -226,15 +226,33 @@ main {
   resize: vertical;
 }
 
-/* --- Pantalla estrecha (móvil): se mantienen las dos mitades, más compactas --- */
-@media (max-width: 640px) {
-  .barra { gap: 0.6rem; padding: 0.6rem; }
-  .btn-principal { flex: 1 1 100%; }
-  .indicador { min-width: 0; }
+/* --- Móvil (pantalla estrecha, o tumbada con poca altura): mandos compactos --- */
+@media (max-width: 640px), (max-height: 520px) {
+  .aviso { padding: 0.2rem 0.6rem; font-size: 0.8rem; }
+  .barra { gap: 0.4rem 0.6rem; padding: 0.4rem 0.6rem; }
+  .btn-principal { min-width: 7rem; padding: 0.55rem 1.2rem; font-size: 1.15rem; }
+  .indicador { min-width: 0; font-size: 1rem; }
   .acciones { margin-left: 0; }
+  .estado, .mensaje, .recuperar { padding: 0.3rem 0.6rem; font-size: 0.85rem; }
   .cabecera-columnas, .fila { column-gap: 0.6rem; padding-left: 0.6rem; padding-right: 0.6rem; }
   .fila .trad { padding-left: 0.6rem; }
   .cabecera-columnas > div:last-child { padding-left: calc(0.6rem + 2px); }
-  .estado, .mensaje, .recuperar, .aviso { padding-left: 0.6rem; padding-right: 0.6rem; }
+  .prueba { padding: 0.3rem 0.6rem; }
   .prueba-cuerpo { flex-direction: column; align-items: stretch; }
+
+  /* Mientras se escucha se esconde lo que no hace falta, para dejar sitio al texto. */
+  body.escuchando .idiomas,
+  body.escuchando .acciones,
+  body.escuchando .prueba,
+  body.escuchando .estado[data-estado="listo"] { display: none; }
+}
+
+/* --- Móvil en vertical: cada frase con su traducción debajo (dos columnas no caben) --- */
+@media (max-width: 640px) {
+  .cabecera-columnas { display: none; }
+  .filas { border-top: 2px solid var(--borde); }
+  .fila { grid-template-columns: 1fr; row-gap: 0.25rem; font-size: 1.25rem; }
+  .fila .orig { font-size: 0.85em; }
+  .fila .trad { border-left: 3px solid var(--verde); padding-left: 0.6rem; }
+  .fila .trad.fallo { display: none; }
 }
