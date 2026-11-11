@@ -1,0 +1,240 @@
+/* Traductor de reuniones — estilos.
+   Tema claro: lo provisional va en gris claro y lo confirmado en negro. */
+
+:root {
+  --texto: #111;
+  --gris-provisional: #a3a3a3;
+  --borde: #e2e2e2;
+  --fondo: #fff;
+  --fondo-suave: #f5f5f4;
+  --verde: #15803d;
+  --rojo: #c81e1e;
+  --ambar: #b45309;
+}
+
+* { box-sizing: border-box; }
+[hidden] { display: none !important; }
+
+html, body { height: 100%; }
+
+body {
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  height: 100dvh;
+  background: var(--fondo);
+  color: var(--texto);
+  font-family: system-ui, "Segoe UI", Roboto, Arial, sans-serif;
+  font-size: 16px;
+}
+
+button, select, textarea { font: inherit; color: inherit; }
+
+button {
+  padding: 0.5rem 0.9rem;
+  border: 1px solid #bbb;
+  border-radius: 8px;
+  background: #fff;
+  cursor: pointer;
+}
+button:hover:not(:disabled) { background: var(--fondo-suave); }
+button:disabled { opacity: 0.45; cursor: not-allowed; }
+
+select {
+  padding: 0.4rem 0.5rem;
+  border: 1px solid #bbb;
+  border-radius: 8px;
+  background: #fff;
+}
+
+/* --- Aviso fijo --- */
+.aviso {
+  flex: none;
+  padding: 0.4rem 1rem;
+  background: #fef3c7;
+  border-bottom: 1px solid #f1d98a;
+  color: #713f12;
+  font-weight: 600;
+  text-align: center;
+}
+
+/* --- Barra de mandos --- */
+.barra {
+  flex: none;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.75rem 1.25rem;
+  padding: 0.75rem 1rem;
+  border-bottom: 1px solid var(--borde);
+}
+
+.btn-principal {
+  min-width: 9rem;
+  padding: 0.8rem 1.6rem;
+  border: none;
+  border-radius: 12px;
+  background: var(--verde);
+  color: #fff;
+  font-size: 1.4rem;
+  font-weight: 700;
+}
+.btn-principal:hover:not(:disabled) { background: #166534; }
+.btn-principal.activo { background: var(--rojo); }
+.btn-principal.activo:hover:not(:disabled) { background: #a51616; }
+
+.indicador {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  min-width: 9.5rem;
+  font-size: 1.1rem;
+  font-weight: 600;
+  color: #666;
+}
+.punto {
+  width: 1rem;
+  height: 1rem;
+  border-radius: 50%;
+  background: #bbb;
+}
+.indicador[data-estado="escuchando"] { color: var(--rojo); }
+.indicador[data-estado="escuchando"] .punto {
+  background: var(--rojo);
+  animation: latido 1.2s ease-in-out infinite;
+}
+.indicador[data-estado="reconectando"] { color: var(--ambar); }
+.indicador[data-estado="reconectando"] .punto { background: var(--ambar); }
+
+@keyframes latido {
+  0%, 100% { transform: scale(1); opacity: 1; }
+  50% { transform: scale(1.5); opacity: 0.45; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .indicador .punto { animation: none !important; }
+}
+
+.idiomas {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+}
+.acciones {
+  display: flex;
+  gap: 0.5rem;
+  margin-left: auto;
+}
+
+/* --- Franjas de estado y mensajes --- */
+.estado, .mensaje, .recuperar {
+  flex: none;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem 0.75rem;
+  padding: 0.4rem 1rem;
+  border-bottom: 1px solid var(--borde);
+  font-size: 0.95rem;
+}
+.estado { background: var(--fondo-suave); color: #444; }
+.estado[data-estado="listo"] { color: var(--verde); }
+.estado[data-estado="nodisp"] { background: #fee2e2; color: #7f1d1d; font-weight: 600; }
+.estado[data-estado="descargable"] { background: #e0f2fe; color: #0c4a6e; }
+.estado progress { width: 12rem; max-width: 100%; }
+.mensaje { background: #fee2e2; color: #7f1d1d; font-weight: 600; }
+.recuperar { background: #e0f2fe; color: #0c4a6e; font-weight: 600; }
+
+/* --- Las dos mitades --- */
+main {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.cabecera-columnas, .fila {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  column-gap: 1.5rem;
+  padding-left: 1rem;
+  padding-right: 1rem;
+}
+
+.cabecera-columnas {
+  flex: none;
+  padding-top: 0.4rem;
+  padding-bottom: 0.4rem;
+  border-bottom: 2px solid var(--borde);
+  color: #555;
+  font-size: 0.85rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.filas {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  scrollbar-gutter: stable;
+  padding-bottom: 1.5rem;
+}
+.filas:empty::before {
+  content: "Pulsa Iniciar para empezar a escuchar. Lo que se oiga aparecerá aquí, con su traducción al lado.";
+  display: block;
+  padding: 2rem 1rem;
+  color: #777;
+  font-size: 1.1rem;
+}
+
+/* Cada frase es una fila: original a la izquierda, traducción a la derecha. */
+.fila {
+  padding-top: 0.6rem;
+  padding-bottom: 0.6rem;
+  border-bottom: 1px solid #efefef;
+  font-size: clamp(1.1rem, 0.9rem + 1vw, 1.7rem);
+  line-height: 1.4;
+}
+.fila > div { overflow-wrap: anywhere; }
+.fila .trad { border-left: 2px solid var(--borde); padding-left: 1.5rem; }
+.fila .provisional { color: var(--gris-provisional); }
+.fila .fallo { color: #b0b0b0; font-style: italic; }
+
+.cabecera-columnas > div:last-child { padding-left: calc(1.5rem + 2px); }
+
+/* --- Modo de prueba --- */
+.prueba {
+  flex: none;
+  border-top: 1px solid var(--borde);
+  background: var(--fondo-suave);
+  padding: 0.5rem 1rem;
+}
+.prueba summary { cursor: pointer; font-weight: 600; color: #444; }
+.prueba-cuerpo {
+  display: flex;
+  gap: 0.75rem;
+  align-items: flex-end;
+  margin-top: 0.5rem;
+}
+.prueba textarea {
+  flex: 1;
+  min-width: 0;
+  padding: 0.5rem;
+  border: 1px solid #bbb;
+  border-radius: 8px;
+  resize: vertical;
+}
+
+/* --- Pantalla estrecha (móvil): se mantienen las dos mitades, más compactas --- */
+@media (max-width: 640px) {
+  .barra { gap: 0.6rem; padding: 0.6rem; }
+  .btn-principal { flex: 1 1 100%; }
+  .indicador { min-width: 0; }
+  .acciones { margin-left: 0; }
+  .cabecera-columnas, .fila { column-gap: 0.6rem; padding-left: 0.6rem; padding-right: 0.6rem; }
+  .fila .trad { padding-left: 0.6rem; }
+  .cabecera-columnas > div:last-child { padding-left: calc(0.6rem + 2px); }
+  .estado, .mensaje, .recuperar, .aviso { padding-left: 0.6rem; padding-right: 0.6rem; }
+  .prueba-cuerpo { flex-direction: column; align-items: stretch; }
+}

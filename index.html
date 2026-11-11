@@ -1,0 +1,85 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Traductor de reuniones</title>
+  <link rel="icon" href="data:,">
+  <link rel="stylesheet" href="estilos.css">
+</head>
+<body>
+
+  <div class="aviso" role="note">Informa a los asistentes de que se transcribe la reunión.</div>
+
+  <header class="barra">
+    <button id="btnEscuchar" class="btn-principal" type="button">Iniciar</button>
+
+    <div id="indicador" class="indicador" data-estado="parado" role="status">
+      <span class="punto" aria-hidden="true"></span>
+      <span id="indicadorTexto">Parado</span>
+    </div>
+
+    <div class="idiomas">
+      <label>Se habla en
+        <select id="selOrigen">
+          <option value="fr-FR" selected>Francés</option>
+          <option value="en-US">Inglés (EE. UU.)</option>
+          <option value="en-GB">Inglés (Reino Unido)</option>
+          <option value="de-DE">Alemán</option>
+          <option value="it-IT">Italiano</option>
+          <option value="pt-PT">Portugués</option>
+          <option value="es-ES">Español</option>
+        </select>
+      </label>
+      <span aria-hidden="true">→</span>
+      <label>Traducir a
+        <select id="selDestino">
+          <option value="es" selected>Español</option>
+          <option value="en">Inglés</option>
+          <option value="fr">Francés</option>
+          <option value="de">Alemán</option>
+          <option value="it">Italiano</option>
+          <option value="pt">Portugués</option>
+        </select>
+      </label>
+    </div>
+
+    <div class="acciones">
+      <button id="btnDescargar" type="button" disabled>Descargar .md</button>
+      <button id="btnBorrar" type="button" disabled>Borrar todo</button>
+    </div>
+  </header>
+
+  <div id="estadoTraductor" class="estado" data-estado="comprobando" role="status">
+    <span id="estadoTraductorTexto">Comprobando el traductor…</span>
+    <progress id="barraProgreso" max="1" value="0" hidden></progress>
+    <button id="btnPrepararTraductor" type="button" hidden>Descargar traductor</button>
+  </div>
+
+  <div id="mensaje" class="mensaje" role="alert" hidden></div>
+
+  <div id="recuperar" class="recuperar" hidden>
+    <span id="recuperarTexto"></span>
+    <button id="btnRecuperar" type="button">Recuperar</button>
+    <button id="btnDescartar" type="button">Descartar</button>
+  </div>
+
+  <main>
+    <div class="cabecera-columnas">
+      <div id="tituloOrigen">Original</div>
+      <div id="tituloDestino">Traducción</div>
+    </div>
+    <div id="filas" class="filas"></div>
+  </main>
+
+  <details class="prueba">
+    <summary>Modo de prueba (sin micrófono)</summary>
+    <div class="prueba-cuerpo">
+      <textarea id="textoPrueba" rows="3" placeholder="Pega aquí un texto en el idioma de origen y pulsa el botón. Cada frase se añade a la transcripción como si se hubiera oído."></textarea>
+      <button id="btnPrueba" type="button">Traducir este texto</button>
+    </div>
+  </details>
+
+  <script src="app.js"></script>
+</body>
+</html>
