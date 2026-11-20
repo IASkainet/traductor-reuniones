@@ -4,8 +4,12 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="robots" content="noindex, nofollow">
+  <meta name="theme-color" content="#1d4ed8">
+  <meta name="description" content="Transcribe y traduce reuniones en directo. Solo guarda texto, y se queda en tu aparato.">
   <title>Traductor de reuniones</title>
-  <link rel="icon" href="data:,">
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="icon" type="image/png" sizes="32x32" href="iconos/favicon-32.png">
+  <link rel="apple-touch-icon" href="iconos/icono-180.png">
   <link rel="stylesheet" href="estilos.css">
 </head>
 <body data-pantalla="inicio" data-modo="traduccion">
@@ -13,6 +17,9 @@
   <div class="aviso" role="note">Informa a los asistentes de que se transcribe la reunión.</div>
 
   <div id="mensaje" class="mensaje" role="alert" hidden></div>
+
+  <!-- Aviso de versión nueva (franja arriba, para no tapar los botones) -->
+  <button id="avisoActualizacion" class="aviso-actualizacion" type="button" hidden>Hay una actualización, toca para recargar</button>
 
   <!-- ===================== Pantalla de inicio ===================== -->
   <section id="pantallaInicio" class="pantalla pantalla-inicio">
@@ -53,6 +60,8 @@
       <p class="inicio-nota">Toca un modo y empieza a escuchar al momento.</p>
       <div class="inicio-pie">
         <button id="btnPreparar" type="button">Preparar mis idiomas</button>
+        <button id="btnInstalarApp" type="button" hidden>Instalar la app</button>
+        <a class="enlace-boton" href="instalar.html">Cómo instalarla</a>
       </div>
     </div>
   </section>
@@ -133,7 +142,14 @@
 
   <dialog id="dlgMenu" class="ventana">
     <h2>Más opciones</h2>
+    <div class="tamano-texto" role="group" aria-label="Tamaño del texto">
+      <span>Tamaño del texto</span>
+      <button id="btnTextoMenos" type="button" aria-label="Texto más pequeño">A−</button>
+      <output id="txtEscala">100 %</output>
+      <button id="btnTextoMas" type="button" aria-label="Texto más grande">A+</button>
+    </div>
     <div class="menu-lista">
+      <a class="enlace-boton" href="instalar.html">Cómo instalarla (Android y PC)</a>
       <button id="btnAbrirPrueba" type="button">Modo de prueba (sin micrófono)</button>
       <button id="btnAbrirDiario" type="button">Registro de diagnóstico</button>
     </div>
@@ -244,5 +260,6 @@
   <script src="inicio.js"></script>
   <script src="interlocutores.js"></script>
   <script src="revision.js"></script>
+  <script src="instalable.js"></script>
 </body>
 </html>

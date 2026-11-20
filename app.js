@@ -1156,4 +1156,14 @@ document.addEventListener('DOMContentLoaded', () => {
   mostrarPantalla('inicio');
   ofrecerRecuperacion();
   actualizarControles();
+  // Si se acaba de recargar por una actualización, la reunión vuelve sola, tal como estaba.
+  let trasActualizar = false;
+  try {
+    trasActualizar = sessionStorage.getItem(CLAVE_TRAS_ACTUALIZAR) === '1'; // en instalable.js
+    sessionStorage.removeItem(CLAVE_TRAS_ACTUALIZAR);
+  } catch { /* da igual */ }
+  if (trasActualizar && copiaPendiente) {
+    registrar('Reunión recuperada tras la actualización.');
+    recuperarCopia();
+  }
 });

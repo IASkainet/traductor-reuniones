@@ -372,6 +372,28 @@ async function descargarIdiomas() {
   }
 }
 
+// ---------- Tamaño del texto (menú ⋮), para leer desde lejos ----------
+
+const ESCALA_MIN = 0.8;
+const ESCALA_MAX = 1.8;
+
+function aplicarEscala() {
+  const escala = Math.min(ESCALA_MAX, Math.max(ESCALA_MIN, Number(ajustes.escala) || 1));
+  ajustes.escala = Math.round(escala * 10) / 10;
+  document.documentElement.style.setProperty('--escala', ajustes.escala);
+  $('txtEscala').textContent = `${Math.round(ajustes.escala * 100)} %`;
+}
+
+function cambiarEscala(paso) {
+  ajustes.escala = (Number(ajustes.escala) || 1) + paso;
+  aplicarEscala();
+  guardarAjustes();
+}
+
+$('btnTextoMenos').addEventListener('click', () => cambiarEscala(-0.1));
+$('btnTextoMas').addEventListener('click', () => cambiarEscala(0.1));
+aplicarEscala();
+
 // ---------- Botones ----------
 
 for (const b of document.querySelectorAll('.btn-modo')) {

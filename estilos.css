@@ -17,6 +17,7 @@
 [hidden] { display: none !important; }
 
 html, body { height: 100%; }
+html { -webkit-text-size-adjust: 100%; }
 
 body {
   margin: 0;
@@ -27,11 +28,16 @@ body {
   color: var(--texto);
   font-family: system-ui, "Segoe UI", Roboto, Arial, sans-serif;
   font-size: 16px;
+  /* En la tablet: sin zoom por doble toque ni «tirar para recargar» por accidente. */
+  touch-action: manipulation;
+  overscroll-behavior: none;
+  -webkit-tap-highlight-color: transparent;
 }
 
 button, select, textarea { font: inherit; color: inherit; }
 
 button {
+  min-height: 2.75rem; /* se puede tocar con el dedo sin apuntar */
   padding: 0.5rem 0.9rem;
   border: 1px solid #bbb;
   border-radius: 8px;
@@ -239,6 +245,7 @@ main {
   flex: 1;
   min-height: 0;
   overflow-y: auto;
+  overscroll-behavior: contain;
   scrollbar-gutter: stable;
   padding-bottom: 1.5rem;
 }
@@ -255,7 +262,7 @@ main {
   padding-top: 0.6rem;
   padding-bottom: 0.6rem;
   border-bottom: 1px solid #efefef;
-  font-size: clamp(1.1rem, 0.9rem + 1vw, 1.7rem);
+  font-size: calc(clamp(1.15rem, 0.9rem + 1vw, 1.75rem) * var(--escala, 1));
   line-height: 1.4;
 }
 /* Cada celda lleva el nombre de quien habla y una raya de su color. */
@@ -300,7 +307,7 @@ main {
 @media (max-width: 640px) {
   .cabecera-columnas { display: none; }
   .filas { border-top: 2px solid var(--borde); }
-  .fila { grid-template-columns: 1fr; row-gap: 0.25rem; font-size: 1.25rem; }
+  .fila { grid-template-columns: 1fr; row-gap: 0.25rem; font-size: calc(1.25rem * var(--escala, 1)); }
   .fila .orig { font-size: 0.85em; }
   .celda-trad .quien { display: none; } /* el nombre ya está encima, en el original */
   .celda-trad:has(.trad.fallo) { display: none; }
@@ -578,6 +585,7 @@ body[data-modo="reunion"] .filas:empty::before { content: "Lo que se oiga aparec
   flex: 1;
   min-height: 0;
   overflow-y: auto;
+  overscroll-behavior: contain;
   padding: 0.5rem 1rem 2rem;
 }
 .rev-fila {
@@ -592,7 +600,7 @@ body[data-modo="reunion"] .filas:empty::before { content: "Lo que se oiga aparec
   border-radius: 10px;
   background: #fff;
   text-align: left;
-  font-size: clamp(1.05rem, 0.9rem + 0.6vw, 1.35rem);
+  font-size: calc(clamp(1.05rem, 0.9rem + 0.6vw, 1.35rem) * var(--escala, 1));
   line-height: 1.35;
 }
 .rev-fila.sin-asignar { border-left-style: dashed; }
@@ -622,4 +630,78 @@ body[data-modo="reunion"] .filas:empty::before { content: "Lo que se oiga aparec
   font: inherit;
   font-size: 1.1rem;
   resize: vertical;
+}
+
+/* --- App instalable --- */
+.enlace-boton {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 2.75rem;
+  padding: 0.5rem 0.9rem;
+  border: 1px solid #bbb;
+  border-radius: 8px;
+  background: #fff;
+  color: #1d4ed8;
+  font-weight: 600;
+  text-decoration: none;
+}
+.menu-lista .enlace-boton { justify-content: flex-start; padding: 0.9rem 1rem; font-size: 1.1rem; }
+#btnInstalarApp { background: #1d4ed8; border-color: #1d4ed8; color: #fff; font-weight: 700; }
+#btnInstalarApp:hover { background: #1e40af; }
+.aviso-actualizacion {
+  flex: none;
+  width: 100%;
+  min-height: 3.2rem;
+  padding: 0.6rem 1rem;
+  border: none;
+  border-radius: 0;
+  background: #1d4ed8;
+  color: #fff;
+  font-size: 1.15rem;
+  font-weight: 800;
+}
+.aviso-actualizacion:hover:not(:disabled) { background: #1e40af; }
+
+/* --- Tamaño del texto (menú) --- */
+.tamano-texto {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  margin-bottom: 0.9rem;
+  font-weight: 600;
+}
+.tamano-texto span { margin-right: auto; }
+.tamano-texto button { min-width: 3.2rem; font-size: 1.2rem; font-weight: 800; }
+.tamano-texto output { min-width: 3.5rem; text-align: center; }
+
+/* --- Tablet de 11" (unos 1280 × 800 en horizontal, 800 × 1280 en vertical) --- */
+@media (min-width: 760px) and (min-height: 700px) {
+  .barra { gap: 0.75rem 1.25rem; padding: 0.8rem 1.25rem; }
+  .btn-principal { min-height: 3.6rem; font-size: 1.5rem; }
+  .indicador { min-height: 3.2rem; font-size: 1.4rem; }
+  .btn-menu { min-width: 3.4rem; min-height: 3.4rem; }
+  .btn-interlocutor { min-height: 3.8rem; font-size: 1.25rem; }
+  .barra-interlocutores { padding: 0.75rem 1.25rem; }
+}
+/* Tablet en vertical: más alto que ancho, las dos columnas siguen cabiendo. */
+@media (min-width: 760px) and (orientation: portrait) {
+  .cabecera-columnas, .fila { column-gap: 1rem; }
+  .btn-modo { min-height: 15rem; }
+}
+
+/* --- Pantallas pequeñas: la barra de interlocutores se desliza en vez de ocupar dos filas --- */
+@media (max-width: 640px), (max-height: 520px) {
+  .barra-interlocutores {
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    padding: 0.4rem 0.6rem;
+    overscroll-behavior-x: contain;
+  }
+  .habla-etiqueta { display: none; }
+  .btn-interlocutor { flex: none; min-width: auto; min-height: 2.9rem; font-size: 1.05rem; }
+  .btn-nombres { flex: none; }
+  .btn-terminar { min-height: 2.75rem; padding: 0.4rem 0.9rem; font-size: 1.05rem; }
+  .inicio-cuerpo { padding: 1rem; justify-content: flex-start; }
+  .btn-modo { min-height: 9rem; }
 }

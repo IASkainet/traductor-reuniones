@@ -1,0 +1,128 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="robots" content="noindex, nofollow">
+  <meta name="theme-color" content="#1d4ed8">
+  <title>Cómo instalar el Traductor de reuniones</title>
+  <link rel="icon" type="image/png" href="iconos/favicon-32.png">
+  <link rel="manifest" href="manifest.webmanifest">
+  <style>
+    :root { --azul: #1d4ed8; --texto: #1c1917; --suave: #f5f5f4; --borde: #e2e2e2; }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      background: #fff;
+      color: var(--texto);
+      font: 18px/1.55 system-ui, "Segoe UI", Roboto, Arial, sans-serif;
+    }
+    header {
+      display: flex;
+      align-items: center;
+      gap: 1rem;
+      padding: 1.25rem 1rem;
+      background: var(--azul);
+      color: #fff;
+    }
+    header img { width: 64px; height: 64px; border-radius: 14px; flex: none; }
+    header h1 { margin: 0; font-size: 1.6rem; line-height: 1.2; }
+    header p { margin: 0.2rem 0 0; opacity: 0.9; }
+    main { max-width: 46rem; margin: 0 auto; padding: 1rem 1rem 3rem; }
+    h2 { margin: 2rem 0 0.5rem; font-size: 1.35rem; }
+    h3 { margin: 1.25rem 0 0.25rem; font-size: 1.1rem; }
+    ol, ul { padding-left: 1.4rem; }
+    li { margin: 0.35rem 0; }
+    .caja { margin: 1rem 0; padding: 0.9rem 1rem; border-radius: 12px; background: var(--suave); border: 1px solid var(--borde); }
+    .aviso { background: #fef3c7; border-color: #f1d98a; }
+    .boton {
+      display: inline-block;
+      margin: 0.5rem 0.5rem 0 0;
+      padding: 0.8rem 1.3rem;
+      border-radius: 12px;
+      background: var(--azul);
+      color: #fff;
+      font-weight: 700;
+      text-decoration: none;
+    }
+    .boton.secundario { background: #fff; color: var(--azul); border: 2px solid var(--azul); }
+    code { padding: 0.1rem 0.3rem; border-radius: 4px; background: var(--suave); font-size: 0.9em; overflow-wrap: anywhere; }
+    nav a { margin-right: 1rem; }
+  </style>
+</head>
+<body>
+  <header>
+    <img src="iconos/icono-192.png" alt="">
+    <div>
+      <h1>Cómo instalar el Traductor de reuniones</h1>
+      <p>Transcribe y traduce reuniones en directo. Gratis, sin cuentas, y solo guarda texto en tu aparato.</p>
+    </div>
+  </header>
+
+  <main>
+    <p>
+      <a class="boton" href="./">Abrir la app</a>
+    </p>
+    <nav><a href="#android">Android</a> <a href="#windows">Windows</a> <a href="#primera-vez">La primera vez</a></nav>
+
+    <div class="caja aviso">
+      <strong>Hace falta Google Chrome</strong> (en el móvil, la tablet y el PC). En otros navegadores
+      (Samsung Internet, Edge, Firefox…) el reconocimiento de voz no funciona.
+      También hace falta Internet durante la reunión: el reconocimiento de voz lo hace el servicio de Google.
+    </div>
+
+    <h2 id="android">En Android (móvil o tablet)</h2>
+    <ol>
+      <li>Abre <strong>Google Chrome</strong> (en las Samsung, no el navegador «Internet» de Samsung) y entra en
+        <code>https://iaskainet.github.io/traductor-reuniones/</code></li>
+      <li>Si abajo aparece «Instalar app» o «Añadir a pantalla de inicio», púlsalo.
+        Si no aparece: toca el menú <strong>⋮</strong> de Chrome (arriba a la derecha) → <strong>«Añadir a pantalla de inicio»</strong>
+        → <strong>«Instalar»</strong>.</li>
+      <li>Aparece el icono <strong>«Reuniones»</strong> (dos bocadillos, azul y amarillo) en la pantalla de inicio o en la lista de apps.</li>
+      <li>Ábrela siempre desde ese icono: se abre a pantalla completa, sin la barra de Chrome.</li>
+    </ol>
+
+    <h2 id="windows">En un PC con Windows</h2>
+    <h3>1. Instalarla desde Chrome</h3>
+    <ol>
+      <li>Abre <strong>Google Chrome</strong> y entra en <code>https://iaskainet.github.io/traductor-reuniones/</code></li>
+      <li>En la pantalla de inicio de la app, pulsa <strong>«Instalar la app»</strong> si aparece.
+        Si no: en la barra de direcciones de Chrome, a la derecha, pulsa el icono de instalar
+        (una pantalla con una flecha). Si tampoco está: menú <strong>⋮</strong> de Chrome →
+        <strong>«Enviar, guardar y compartir»</strong> → <strong>«Instalar página como aplicación…»</strong>
+        (según la versión de Chrome, los nombres pueden cambiar un poco).</li>
+      <li>Pulsa <strong>«Instalar»</strong>. La app se abre en su propia ventana, sin barra de direcciones,
+        y queda en el <strong>menú Inicio</strong> como «Traductor de reuniones».</li>
+    </ol>
+    <h3>2. Acceso en el escritorio</h3>
+    <p>Normalmente Chrome lo crea solo. Si no aparece en el escritorio:</p>
+    <ol>
+      <li>Abre el menú Inicio → <strong>«Todas las aplicaciones»</strong> y busca «Traductor de reuniones».</li>
+      <li><strong>Arrástrala</strong> con el ratón hasta el escritorio: se crea el acceso con su icono.</li>
+    </ol>
+    <h3>3. Anclarla a la barra de tareas</h3>
+    <ol>
+      <li>Abre la app.</li>
+      <li>En la barra de tareas (abajo), haz clic con el botón derecho en su icono → <strong>«Anclar a la barra de tareas»</strong>.</li>
+    </ol>
+    <h3>Si Chrome no ofrece instalarla (plan B)</h3>
+    <p>
+      Descarga el archivo <a href="acceso-windows/crear-acceso.ps1" download>crear-acceso.ps1</a>,
+      haz clic derecho sobre él → <strong>«Ejecutar con PowerShell»</strong>.
+      Crea un acceso «Traductor de reuniones» en el escritorio y en el menú Inicio que abre la app en su propia
+      ventana de Chrome, con su icono. No instala nada más.
+    </p>
+
+    <h2 id="primera-vez">La primera vez</h2>
+    <ul>
+      <li>Cuando Chrome pida permiso para el <strong>micrófono</strong>, acéptalo.</li>
+      <li>Con wifi y antes de la reunión, en la pantalla de inicio pulsa <strong>«Preparar mis idiomas»</strong>
+        y espera a que todo ponga «Listo». En el móvil o la tablet el traductor ocupa unos 120 MB por cada pareja de idiomas.</li>
+      <li>Avisa siempre a los asistentes de que se transcribe la reunión.</li>
+      <li>En Android, mantén la app delante y la pantalla encendida: si la bloqueas o cambias de app, se deja de escuchar (la app te avisa).</li>
+    </ul>
+
+    <p><a class="boton" href="./">Abrir la app</a></p>
+  </main>
+</body>
+</html>
