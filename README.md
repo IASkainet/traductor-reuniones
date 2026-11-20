@@ -38,7 +38,7 @@ No hace falta el PC: la misma app está publicada en <https://iaskainet.github.i
 
 - La traducción no usa el traductor de Chrome (no existe en Android), sino un modelo abierto (Opus-MT) que se ejecuta en el propio móvil. El texto no sale del teléfono. Es algo más lento y traduce un poco distinto.
 - En Android el micrófono se corta al final de cada frase y se vuelve a conectar solo. En ese instante puede perderse alguna palabra.
-- La pantalla se mantiene encendida mientras escucha. Si bloqueas el móvil o cambias de app, la escucha se detiene y se reanuda al volver.
+- La pantalla se mantiene encendida mientras escucha. Si bloqueas el móvil o cambias de app, la escucha se detiene y se reanuda al volver; si pasan más de 20 s, pita para avisarte, y al volver te dice cuánto tiempo no se escuchó.
 - No hay portugués en el móvil (no existe ese modelo).
 
 Para publicar un cambio hecho en esta carpeta: `git push` (tarda unos minutos en verse en el móvil).
@@ -65,15 +65,28 @@ Chrome tiene que descargar el paquete de traducción. Pulsa «Descargar traducto
 ## Qué hace cada cosa
 
 - **Aviso amarillo**: recuerda que hay que informar a los asistentes.
-- **Punto de estado**: rojo latiendo = escuchando; ámbar = reconectando; gris = parado.
-- **Copia de seguridad**: la transcripción se guarda sola en el navegador cada 3 segundos. Si cierras la pestaña, al volver a abrirla ofrece recuperarla.
+- **Estado de la escucha** (pastilla de color y marco alrededor de la pantalla):
+  - verde «Escuchando»: todo bien;
+  - ámbar «Arrancando…» / «Reanudando…»: Chrome ha cortado y la app lo está volviendo a abrir (los cortes de menos de 1,5 s no se enseñan);
+  - rojo «PARADO» parpadeando: se ha parado sola por un problema que no se arregla reintentando;
+  - gris «Parado»: la has parado tú (o aún no has empezado).
+- **Reanudación automática**: si Chrome corta (silencio, fin de frase, cada cierto tiempo), la app vuelve a escuchar sola, sin límite, hasta que pulses Parar. Lo que estaba en gris se guarda y las frases que Chrome manda repetidas al reanudar se descartan.
+- **Aviso grande** (pantalla roja, pitido cada 10 s y vibración si el aparato vibra):
+  - si se para sola: sin permiso de micrófono, sin micrófono, idioma no admitido o más de 30 s sin conexión;
+  - si lleva más de 20 s sin conseguir volver a escuchar (sigue intentándolo mientras tanto).
+- **Aviso al volver**: si la app pasó a segundo plano o se apagó la pantalla y el micrófono se cortó, al volver dice entre qué horas no se escuchó, y retoma la escucha.
+- **Pantalla encendida**: mientras escucha, la pantalla no se apaga sola.
+- **Copia de seguridad**: la reunión (incluida la frase que se está diciendo) se guarda sola en el aparato cada 3 segundos y al pasar a segundo plano. Si la app se cierra, al abrirla ofrece «Recuperar la reunión anterior».
+- **Menú ⋮ → Registro de diagnóstico**: hora de cada corte o parada, el motivo y si se reanudó. No guarda nada de lo que se dice. Si algo falla, pulsa «Copiar» y pégalo en el chat con Claude.
 - **Borrar todo**: vacía la pantalla y la copia de seguridad para empezar una reunión nueva.
 
 ## Limitaciones conocidas
 
 - **Solo Chrome** (versión 138 o superior en ordenador). En Android funciona con otro traductor; ver «Versión para móvil Android».
 - **Necesita Internet para escuchar**: el reconocimiento de voz envía el audio a Google. La traducción, en cambio, se hace dentro del PC.
-- **Cortes**: Chrome para el reconocimiento tras un silencio o cada cierto tiempo. La app lo reinicia sola, pero en ese instante puede perderse alguna palabra.
+- **Cortes**: Chrome para el reconocimiento tras un silencio o cada cierto tiempo. La app lo reinicia sola, pero mientras vuelve a abrir el micrófono (entre 0,2 y 1 s) lo que se diga no se oye.
+- **Pitido de aviso**: sale por el volumen multimedia. Si lo bajas para no oír el pitido de Android al reconectar, el aviso también sonará más bajo. Con la pantalla bloqueada puede que no suene.
+- **Vibración**: muchas tablets no tienen motor de vibración; en ellas solo hay aviso en pantalla y pitido.
 - **«Frases»**: Chrome decide dónde termina cada trozo según las pausas, y a menudo sin puntuación. Cada fila es un trozo de habla, no siempre una frase completa.
 - **Altavoz y varias voces**: no se distingue quién habla y el eco empeora el resultado.
 - **Paquetes de idioma en C:**: Chrome guarda los paquetes de traducción en su propio perfil (`C:\Users\<usuario>\AppData\Local\Google\Chrome\User Data\TranslateKit`). No se puede cambiar desde la app.
@@ -85,4 +98,6 @@ Chrome tiene que descargar el paquete de traducción. Pulsa «Descargar traducto
 - `index.html`: la página.
 - `estilos.css`: el aspecto.
 - `app.js`: la lógica (escucha, traducción, copia de seguridad y descarga).
+- `avisos.js`: el aviso grande a pantalla completa, el pitido y la vibración.
+- `diagnostico.js`: el registro de diagnóstico y el menú ⋮.
 - `traductor-movil.js`: el traductor que funciona dentro del dispositivo (Android).

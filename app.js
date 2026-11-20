@@ -12,6 +12,14 @@ const ESPERA_COMPROBACION_MS = 8000;            // tope de espera al comprobar e
 const REINTENTOS_TRADUCTOR = 3;                 // reintentos si falla al preparar el traductor
 const CLAVE_MODELO = 'traductorReuniones.modelo.'; // recuerda qué traductores ya se descargaron
 const LIMITE_TRAD_PROVISIONAL_MS = 700;         // si el traductor del móvil tarda más, no traduce el gris
+const MOSTRAR_REANUDANDO_MS = 1500;  // un corte más breve no se enseña (en Android hay uno tras cada frase)
+const ATASCADO_MS = 20000;           // tanto tiempo sin conseguir escuchar -> aviso grande con pitido
+const SILENCIAR_ATASCADO_MS = 60000; // tras «Seguir intentándolo», no vuelve a avisar en este tiempo
+const ESPERA_RED_MS = 30000;         // tiempo reintentando sin conexión antes de parar
+const FALLOS_MICRO_MAX = 3;          // «micrófono no disponible» seguidos antes de parar
+const SIN_NOTICIAS_MS = 90000;       // escuchando sin ninguna señal del reconocimiento -> se reinicia
+const VENTANA_REPETIDA_MS = 10000;   // una frase igual a la anterior dentro de este tiempo es un duplicado
+const LARGO_MIN_REPETIDA = 12;       // las frases muy cortas («oui») no se descartan nunca
 
 // Pares de idiomas con traductor para usar dentro del dispositivo (modelos Opus-MT).
 const MODELOS_DISPONIBLES = [
@@ -68,11 +76,26 @@ let traduciendoProv = false;
 
 let rec = null;                // el reconocimiento de voz en marcha
 let quiereEscuchar = false;    // true desde Iniciar hasta Parar
+let estadoEscucha = 'parado';  // parado | arrancando | escuchando | reanudando | cortado
+let sinEscucharDesde = null;   // desde cuándo quiere escuchar pero no lo consigue
 let ultimoArranque = 0;
+let ultimoEvento = 0;          // última señal de vida del reconocimiento
 let fallosSeguidos = 0;
+let fallosMicro = 0;           // «micrófono no disponible» seguidos
+let inicioErrorRed = null;     // desde cuándo falla la conexión
 let tempReinicio = null;
-let esperaVolver = false;      // en el móvil: la escucha se cortó con la página oculta
+let esperaVolver = false;      // la escucha se cortó con la página oculta: se reanuda al volver
+let ocultoDesde = null;
+let corte = null;              // último corte pendiente de reanudar: { t, motivo }
+let inicioEscucha = null;      // para el resumen del registro
+let reconexionesNormales = 0;
+let cortesConIncidencia = 0;
+let alarmaSilenciadaHasta = 0;
+let mensajeDeEscucha = false;  // la franja roja la ha puesto la escucha
+let ultimaFrase = { norm: '', t: 0 }; // para descartar duplicados al reanudar
 let bloqueoPantalla = null;    // mantiene la pantalla encendida mientras se escucha
+let pidiendoBloqueo = false;
+let avisadoSinBloqueo = false;
 
 // ¿Es Google Chrome de verdad? Otros navegadores parecidos (por ejemplo el panel de
 // navegador de la app de Claude) no dejan usar el micrófono ni traen el traductor.
@@ -152,13 +175,35 @@ function mostrarProvisional(texto) {
     filaProv.texto = texto;
     filaProv.orig.textContent = texto;
   });
+  hayCambios = true;
   programarTradProvisional();
 }
 
+const normalizar = (t) => t.toLowerCase().replace(/[^\p{L}\p{N}]+/gu, ' ').trim();
+
+// Al reanudar, Chrome (sobre todo en Android) a veces vuelve a mandar la última frase.
+// Se descarta si es idéntica a la anterior y llega enseguida; las frases cortas nunca.
+function esRepetida(texto) {
+  const norm = normalizar(texto);
+  const repetida = norm.length >= LARGO_MIN_REPETIDA && norm === ultimaFrase.norm
+    && Date.now() - ultimaFrase.t < VENTANA_REPETIDA_MS;
+  ultimaFrase = { norm, t: Date.now() };
+  return repetida;
+}
+
 // Frase confirmada (negro): se guarda y se manda a traducir.
-function confirmarFrase(texto) {
+// comprobarRepetida = false en el modo de prueba (ahí se pega texto a mano).
+function confirmarFrase(texto, comprobarRepetida = true) {
   texto = (texto || '').trim();
   if (!texto) return;
+  if (comprobarRepetida && esRepetida(texto)) {
+    registrar('Frase repetida descartada al reanudar.');
+    if (filaProv) {
+      filaProv.el.remove();
+      filaProv = null;
+    }
+    return;
+  }
   const seg = { id: siguienteId++, hora: new Date().toISOString(), original: texto, traduccion: null };
   if (!inicioSesion) inicioSesion = seg.hora;
   segmentos.push(seg);
@@ -470,33 +515,100 @@ async function traducirProvisional() {
 
 // ---------- Escucha (Web Speech API de Chrome) ----------
 
-function pintarEscucha(estado) {
-  el.indicador.dataset.estado = estado;
-  el.indicadorTexto.textContent =
-    estado === 'escuchando' ? 'Escuchando' : estado === 'reconectando' ? 'Reconectando…' : 'Parado';
+const TEXTO_ESTADO = {
+  parado: 'Parado',
+  arrancando: 'Arrancando…',
+  escuchando: 'Escuchando',
+  reanudando: 'Reanudando…',
+  cortado: 'PARADO',
+};
+
+// Nombre en español de cada motivo de corte que da Chrome.
+const MOTIVOS = {
+  '': 'fin normal',
+  'no-speech': 'silencio',
+  aborted: 'cancelado',
+  network: 'sin conexión',
+  'not-allowed': 'sin permiso de micrófono',
+  'service-not-allowed': 'servicio de voz no permitido',
+  'audio-capture': 'micrófono no disponible',
+  'language-not-supported': 'idioma no admitido',
+  'reinicio-preventivo': 'reinicio preventivo',
+  'fallo-arranque': 'no se pudo arrancar',
+};
+const describirMotivo = (codigo) => MOTIVOS[codigo || ''] || `error «${codigo}»`;
+
+// Cambia el estado de la escucha y lo enseña.
+//   parado: no escucha porque lo has pedido (o aún no has empezado)
+//   arrancando / reanudando: quiere escuchar pero el micrófono aún no está abierto
+//   escuchando: todo bien
+//   cortado: se ha parado sola por un problema que no se arregla reintentando
+function ponerEstado(estado) {
+  if (estado === 'escuchando' || estado === 'parado' || estado === 'cortado') sinEscucharDesde = null;
+  else if (sinEscucharDesde == null) sinEscucharDesde = Date.now();
+  estadoEscucha = estado;
+  pintarEscucha();
+}
+
+function pintarEscucha() {
+  let visible = estadoEscucha;
+  // En Android el micrófono se reconecta tras cada frase: esos cortes tan breves no se
+  // enseñan, para que el aviso ámbar solo salga cuando de verdad tarda en volver.
+  if (visible === 'reanudando' && Date.now() - sinEscucharDesde < MOSTRAR_REANUDANDO_MS) visible = 'escuchando';
+  el.indicador.dataset.estado = visible;
+  document.body.dataset.escucha = visible;
+  el.indicadorTexto.textContent = TEXTO_ESTADO[visible];
   el.btnEscuchar.textContent = quiereEscuchar ? 'Parar' : 'Iniciar';
   el.btnEscuchar.classList.toggle('activo', quiereEscuchar);
   document.body.classList.toggle('escuchando', quiereEscuchar); // en el móvil esconde lo que no hace falta
   actualizarControles();
 }
 
+// Avisos de la franja roja que pone la escucha (se quitan solos cuando se recupera).
+function avisoEscucha(texto) {
+  mostrarMensaje(texto);
+  mensajeDeEscucha = true;
+}
+function quitarAvisoEscucha() {
+  if (!mensajeDeEscucha) return;
+  mensajeDeEscucha = false;
+  ocultarMensaje();
+}
+
 // Evita que la pantalla se apague sola mientras se escucha (en el móvil cortaría la escucha).
 async function mantenerPantallaEncendida() {
-  if (!('wakeLock' in navigator) || bloqueoPantalla || document.hidden) return;
+  if (!('wakeLock' in navigator)) {
+    if (!avisadoSinBloqueo) registrar('Este navegador no permite mantener la pantalla encendida.');
+    avisadoSinBloqueo = true;
+    return;
+  }
+  if (bloqueoPantalla || pidiendoBloqueo || document.hidden) return;
+  pidiendoBloqueo = true;
   try {
     const bloqueo = await navigator.wakeLock.request('screen');
     bloqueoPantalla = bloqueo;
     bloqueo.addEventListener('release', () => {
-      if (bloqueoPantalla === bloqueo) bloqueoPantalla = null;
+      if (bloqueoPantalla !== bloqueo) return;
+      bloqueoPantalla = null;
+      // Si se suelta sin pasar a segundo plano (por ejemplo, ahorro de batería), se vuelve a pedir.
+      if (quiereEscuchar && !document.hidden) {
+        registrar('Se ha perdido el bloqueo de «pantalla encendida»; se vuelve a pedir.');
+        setTimeout(mantenerPantallaEncendida, 1000);
+      }
     });
     if (!quiereEscuchar) soltarPantalla();
-  } catch { /* si no se puede, se sigue igual */ }
+  } catch (e) {
+    registrar(`No se ha podido mantener la pantalla encendida (${(e && e.name) || e}).`);
+  } finally {
+    pidiendoBloqueo = false;
+  }
 }
 
 function soltarPantalla() {
   if (!bloqueoPantalla) return;
-  bloqueoPantalla.release().catch(() => {});
+  const bloqueo = bloqueoPantalla;
   bloqueoPantalla = null;
+  bloqueo.release().catch(() => {});
 }
 
 function iniciarEscucha() {
@@ -506,16 +618,27 @@ function iniciarEscucha() {
     return;
   }
   ocultarMensaje();
+  mensajeDeEscucha = false;
+  cerrarAlarma();
   quiereEscuchar = true;
   fallosSeguidos = 0;
+  fallosMicro = 0;
+  inicioErrorRed = null;
   esperaVolver = false;
-  pintarEscucha('reconectando');
+  corte = null;
+  alarmaSilenciadaHasta = 0;
+  inicioEscucha = Date.now();
+  reconexionesNormales = 0;
+  cortesConIncidencia = 0;
+  registrar(`Iniciar · idioma ${el.selOrigen.value}${esAndroid ? ' · Android' : ''}`);
+  ponerEstado('arrancando');
   arrancarReconocimiento();
   mantenerPantallaEncendida();
   if (estadoTrad === 'descargable') prepararTraductor();
 }
 
-function pararEscucha() {
+// Deja de escuchar. estadoFinal: 'parado' (lo has pedido) o 'cortado' (se ha parado sola).
+function detenerEscucha(estadoFinal) {
   quiereEscuchar = false;
   esperaVolver = false;
   clearTimeout(tempReinicio);
@@ -523,16 +646,84 @@ function pararEscucha() {
     try { rec.stop(); } catch { /* ya estaba parado */ }
   }
   soltarPantalla();
-  pintarEscucha('parado');
+  if (corte) {
+    registrar(`Corte (${describirMotivo(corte.motivo)}) · no se llegó a reanudar.`);
+    corte = null;
+  }
+  if (inicioEscucha) {
+    registrar(`Resumen: ${duracionTexto(Date.now() - inicioEscucha)} en marcha · `
+      + `${reconexionesNormales} reconexiones normales · ${cortesConIncidencia} cortes con incidencia.`);
+    inicioEscucha = null;
+  }
+  ponerEstado(estadoFinal);
 }
 
-// Detiene la escucha por un problema que no se arregla reintentando.
-function pararPorError(texto) {
+function pararEscucha() {
+  if (!quiereEscuchar) return;
+  registrar('Parar (pulsado por ti).');
+  cerrarAlarma();
+  quitarAvisoEscucha();
+  detenerEscucha('parado');
+}
+
+// Se ha parado sola por un problema que no se arregla reintentando:
+// estado PARADO en rojo, aviso grande, pitido y vibración.
+function pararPorFallo(motivo, texto) {
+  registrar(`PARADA sin pedirla: ${motivo}.`);
+  detenerEscucha('cortado');
   mostrarMensaje(texto);
-  pararEscucha();
+  mostrarAlarma({
+    tipo: 'parada',
+    titulo: 'Se ha parado la escucha',
+    texto: `${motivo}. ${texto}`,
+    sonido: true,
+    botones: [
+      { texto: 'Volver a escuchar', accion: iniciarEscucha, principal: true },
+      { texto: 'Cerrar aviso' },
+    ],
+  });
+}
+
+// Abandona el reconocimiento actual y arranca otro (si Chrome se ha quedado colgado).
+function forzarReinicio() {
+  const viejo = rec;
+  rec = null;
+  if (viejo) {
+    try { viejo.abort(); } catch { /* da igual */ }
+  }
+  if (filaProv) confirmarFrase(filaProv.texto); // lo que quedó en gris no se pierde
+  corte = { t: Date.now(), motivo: 'reinicio-preventivo' };
+  ponerEstado('reanudando');
+  clearTimeout(tempReinicio);
+  tempReinicio = setTimeout(() => {
+    if (quiereEscuchar) arrancarReconocimiento();
+  }, 300);
+}
+
+// Apunta en el registro cómo fue el último corte, ya que se ha vuelto a abrir el micrófono.
+function anotarReanudacion() {
+  if (!corte) return;
+  const hueco = Date.now() - corte.t;
+  const normal = (!corte.motivo || corte.motivo === 'no-speech') && hueco < 2000;
+  if (normal) {
+    reconexionesNormales++; // en Android pasa tras cada frase: no se apunta una a una
+  } else {
+    cortesConIncidencia++;
+    registrar(`Corte (${describirMotivo(corte.motivo)}) · vuelve a escuchar tras ${duracionTexto(hueco)}.`);
+  }
+  corte = null;
 }
 
 function arrancarReconocimiento() {
+  clearTimeout(tempReinicio);
+  // Si quedaba otro reconocimiento abierto, se cierra, y su texto en gris se guarda.
+  if (rec) {
+    const viejo = rec;
+    rec = null;
+    try { viejo.abort(); } catch { /* ya estaba parado */ }
+  }
+  if (filaProv) confirmarFrase(filaProv.texto);
+
   const Reconocimiento = window.SpeechRecognition || window.webkitSpeechRecognition;
   const este = new Reconocimiento();
   rec = este;
@@ -544,15 +735,46 @@ function arrancarReconocimiento() {
   este.maxAlternatives = 1;
 
   let huboResultado = false;
+  let ultimoError = '';
+  let cortadoPorOcultar = false;
   let ultimoConfirmado = ''; // para no repetir una frase que Android manda dos veces
 
+  const senal = () => {
+    if (rec === este) ultimoEvento = Date.now();
+  };
+  este.onaudiostart = senal;
+  este.onsoundstart = senal;
+  este.onspeechstart = senal;
+
   este.onstart = () => {
-    if (rec === este && quiereEscuchar) pintarEscucha('escuchando');
+    if (rec !== este) return;
+    senal();
+    if (!quiereEscuchar) return;
+    // Si venía de fallos de red o de micrófono, aún no se da por bueno hasta que llegue texto.
+    if (inicioErrorRed || fallosMicro) return;
+    anotarReanudacion();
+    ponerEstado('escuchando');
+    quitarAvisoEscucha();
+    if (alarmaActual && alarmaActual.tipo === 'atascado') {
+      registrar('La escucha se ha recuperado sola.');
+      cerrarAlarma();
+    }
   };
 
   este.onresult = (e) => {
     if (rec !== este) return;
+    senal();
     huboResultado = true;
+    if (inicioErrorRed || fallosMicro) {
+      inicioErrorRed = null;
+      fallosMicro = 0;
+      if (quiereEscuchar) {
+        anotarReanudacion();
+        ponerEstado('escuchando');
+        quitarAvisoEscucha();
+        if (alarmaActual && alarmaActual.tipo === 'atascado') cerrarAlarma();
+      }
+    }
     let provisional = '';
     for (let i = e.resultIndex; i < e.results.length; i++) {
       const r = e.results[i];
@@ -573,30 +795,50 @@ function arrancarReconocimiento() {
 
   este.onerror = (e) => {
     if (rec !== este) return;
+    senal();
+    ultimoError = e.error;
+    if (e.error !== 'no-speech' && e.error !== 'aborted') {
+      registrar(`Aviso del reconocimiento: ${describirMotivo(e.error)}${document.hidden ? ' (app en segundo plano)' : ''}.`);
+    }
     switch (e.error) {
-      case 'no-speech': // silencio: Chrome corta y se reinicia solo más abajo
+      case 'no-speech': // silencio: Chrome corta y se vuelve a arrancar más abajo
       case 'aborted':
         break;
       case 'not-allowed':
       case 'service-not-allowed':
-        // En el móvil, con la pantalla apagada o en otra app, Chrome corta el micrófono:
+        // Con la pantalla apagada o en otra app, Chrome corta el micrófono:
         // no es un problema de permisos y se reanuda al volver.
-        if (esAndroid && document.hidden) break;
-        pararPorError(esChromeDeVerdad
-          ? `Chrome no tiene permiso para usar el micrófono. En la barra de direcciones, pulsa el icono que hay justo a la izquierda de «${location.host}», activa «Micrófono» y vuelve a pulsar Iniciar.`
+        if (document.hidden) {
+          cortadoPorOcultar = true;
+          break;
+        }
+        pararPorFallo('Sin permiso para usar el micrófono', esChromeDeVerdad
+          ? `En la barra de direcciones, pulsa el icono que hay justo a la izquierda de «${location.host}», activa «Micrófono» y vuelve a pulsar Iniciar.`
           : AVISO_NO_ES_CHROME);
         break;
       case 'audio-capture':
-        pararPorError('No se encuentra ningún micrófono. Conecta uno y vuelve a pulsar Iniciar.');
+        fallosMicro++;
+        if (fallosMicro >= FALLOS_MICRO_MAX) {
+          pararPorFallo('No se encuentra ningún micrófono',
+            'Comprueba que el micrófono está conectado y que ninguna otra app lo está usando, y vuelve a pulsar Iniciar.');
+        } else {
+          avisoEscucha('El micrófono no responde. Reintentando…');
+        }
         break;
       case 'language-not-supported':
-        pararPorError(`El reconocimiento de voz no admite el idioma ${nombreOrigen()}.`);
+        pararPorFallo('Idioma no admitido', `El reconocimiento de voz no admite el idioma ${nombreOrigen()}. Elige otro y vuelve a pulsar Iniciar.`);
         break;
       case 'network':
-        mostrarMensaje('No hay conexión con el servicio de reconocimiento de voz de Google. Reintentando…');
+        if (!inicioErrorRed) inicioErrorRed = Date.now();
+        if (Date.now() - inicioErrorRed >= ESPERA_RED_MS) {
+          pararPorFallo('Sin conexión a Internet',
+            `Lleva más de ${ESPERA_RED_MS / 1000} segundos sin poder conectar con el reconocimiento de voz de Google. Comprueba el wifi o los datos y vuelve a pulsar Iniciar.`);
+        } else {
+          avisoEscucha('No hay conexión con el reconocimiento de voz de Google. Reintentando…');
+        }
         break;
       default:
-        mostrarMensaje(`Problema con el reconocimiento de voz (${e.error}). Reintentando…`);
+        avisoEscucha(`Problema con el reconocimiento de voz (${e.error}). Reintentando…`);
     }
   };
 
@@ -604,18 +846,23 @@ function arrancarReconocimiento() {
   // se vuelve a arrancar mientras no se haya pulsado Parar. El texto ya capturado no se toca.
   este.onend = () => {
     if (rec !== este) return;
+    senal();
     if (filaProv) confirmarFrase(filaProv.texto); // lo que quedó en gris no se pierde
     if (!quiereEscuchar) {
-      pintarEscucha('parado');
+      if (estadoEscucha !== 'cortado') ponerEstado('parado');
       return;
     }
-    pintarEscucha('reconectando');
-    if (esAndroid && document.hidden) {
+    if (ultimoError !== 'network') inicioErrorRed = null;
+    if (ultimoError !== 'audio-capture') fallosMicro = 0;
+    if (!corte) corte = { t: Date.now(), motivo: ultimoError };
+    ponerEstado('reanudando');
+    if (document.hidden && (esAndroid || cortadoPorOcultar)) {
       esperaVolver = true; // se reanuda al volver a la página (ver más abajo)
+      registrar(`Corte con la app en segundo plano (${describirMotivo(ultimoError)}). Se reanudará al volver.`);
       return;
     }
     const duracion = Date.now() - ultimoArranque;
-    fallosSeguidos = duracion < 2000 && !huboResultado ? fallosSeguidos + 1 : 0;
+    fallosSeguidos = duracion < 2000 && !huboResultado ? Math.min(fallosSeguidos + 1, 10) : 0;
     const base = esAndroid ? 100 : 250;
     const espera = Math.min(base * 2 ** fallosSeguidos, 5000); // si falla seguido, espera más
     tempReinicio = setTimeout(() => {
@@ -626,34 +873,92 @@ function arrancarReconocimiento() {
   ultimoArranque = Date.now();
   try {
     este.start();
-    if (fallosSeguidos === 0) ocultarMensaje();
   } catch (e) {
-    console.warn('No se pudo arrancar el reconocimiento:', e);
-    pararPorError('No se ha podido arrancar el reconocimiento de voz. Vuelve a pulsar Iniciar.');
+    // No se ha podido abrir el micrófono: se vuelve a intentar un poco más tarde.
+    registrar(`No se ha podido arrancar el reconocimiento (${(e && e.name) || e}). Se reintenta.`);
+    rec = null;
+    if (!corte) corte = { t: Date.now(), motivo: 'fallo-arranque' };
+    ponerEstado('reanudando');
+    fallosSeguidos = Math.min(fallosSeguidos + 1, 10);
+    tempReinicio = setTimeout(() => {
+      if (quiereEscuchar) arrancarReconocimiento();
+    }, Math.min(250 * 2 ** fallosSeguidos, 5000));
   }
 }
 
-// Al volver a la página (móvil desbloqueado, vuelta desde otra app) se retoma lo que se cortó.
+// Vigilancia cada medio segundo: enseña «Reanudando…» si tarda, avisa si no consigue
+// volver a escuchar, reinicia el reconocimiento si se queda colgado y repite el pitido.
+function vigilar() {
+  const ahora = Date.now();
+  if (estadoEscucha === 'reanudando') pintarEscucha();
+
+  if (quiereEscuchar && sinEscucharDesde && ahora - sinEscucharDesde >= ATASCADO_MS
+      && ahora >= alarmaSilenciadaHasta && (!alarmaActual || alarmaActual.tipo === 'vuelta')) {
+    registrar(`Aviso: lleva ${duracionTexto(ahora - sinEscucharDesde)} sin poder escuchar.`);
+    mostrarAlarma({
+      tipo: 'atascado',
+      titulo: 'No está escuchando',
+      texto: `Lleva más de ${ATASCADO_MS / 1000} segundos intentando volver a escuchar, sin conseguirlo. Sigue intentándolo sola.`
+        + (document.hidden ? ' La app está en segundo plano: vuelve a abrirla.' : ''),
+      sonido: true,
+      botones: [
+        { texto: 'Seguir intentándolo', principal: true, accion: () => { alarmaSilenciadaHasta = Date.now() + SILENCIAR_ATASCADO_MS; } },
+        { texto: 'Parar la escucha', accion: pararEscucha },
+      ],
+    });
+  }
+
+  if (quiereEscuchar && estadoEscucha === 'escuchando' && rec && !document.hidden
+      && ahora - ultimoEvento >= SIN_NOTICIAS_MS) {
+    registrar(`Reinicio preventivo: ${duracionTexto(ahora - ultimoEvento)} sin ninguna señal del reconocimiento.`);
+    forzarReinicio();
+  }
+
+  repetirPitido(ahora);
+}
+
+// Al pasar a segundo plano se guarda todo; al volver se retoma lo que se cortó y se avisa.
 document.addEventListener('visibilitychange', () => {
-  if (document.hidden || !quiereEscuchar) return;
+  if (document.hidden) {
+    guardarCopia();
+    if (quiereEscuchar) {
+      ocultoDesde = Date.now();
+      registrar('La app pasa a segundo plano mientras escucha.');
+    }
+    return;
+  }
+  if (!quiereEscuchar) return;
+  registrar('La app vuelve al primer plano.');
   mantenerPantallaEncendida();
   if (esperaVolver) {
     esperaVolver = false;
+    const desde = (corte && corte.t) || ocultoDesde || Date.now();
+    const ahora = Date.now();
+    mostrarAlarma({
+      tipo: 'vuelta',
+      titulo: 'Se ha cortado la escucha',
+      texto: `Mientras la app estaba en segundo plano o con la pantalla apagada no se ha escuchado nada: de ${horaTexto(new Date(desde))} a ${horaTexto(new Date(ahora))} (${duracionTexto(ahora - desde)}). Ya vuelve a escuchar.`,
+      botones: [{ texto: 'Entendido', principal: true }],
+    });
     arrancarReconocimiento();
   }
+  ocultoDesde = null;
 });
 
 // ---------- Copia de seguridad (localStorage) ----------
 
 function guardarCopia() {
   if (!hayCambios || copiaPendiente) return;
+  const provisional = filaProv ? filaProv.texto : '';
   try {
-    if (segmentos.length) {
+    if (segmentos.length || provisional) {
       localStorage.setItem(CLAVE_COPIA, JSON.stringify({
         inicio: inicioSesion,
+        guardada: new Date().toISOString(),
         origen: el.selOrigen.value,
         destino: el.selDestino.value,
         segmentos,
+        provisional, // la frase que se estaba diciendo, aún en gris
       }));
     } else {
       localStorage.removeItem(CLAVE_COPIA);
@@ -661,6 +966,7 @@ function guardarCopia() {
     hayCambios = false;
   } catch (e) {
     console.warn('No se pudo guardar la copia de seguridad:', e);
+    registrar(`No se ha podido guardar la copia de seguridad (${(e && e.name) || e}).`);
     mostrarMensaje('No se ha podido guardar la copia de seguridad. Descarga el .md para no perder nada.');
   }
 }
@@ -670,13 +976,15 @@ function ofrecerRecuperacion() {
   try {
     copia = JSON.parse(localStorage.getItem(CLAVE_COPIA));
   } catch { /* copia ilegible: se ignora */ }
-  if (!copia || !Array.isArray(copia.segmentos) || copia.segmentos.length === 0) return;
+  if (!copia || !Array.isArray(copia.segmentos)) return;
+  const n = copia.segmentos.length + (copia.provisional ? 1 : 0);
+  if (n === 0) return;
   copiaPendiente = copia;
   const cuando = copia.inicio ? fechaTexto(new Date(copia.inicio)) : 'fecha desconocida';
-  const n = copia.segmentos.length;
   el.recuperarTexto.textContent =
-    `Hay una transcripción guardada del ${cuando} con ${n} ${n === 1 ? 'frase' : 'frases'}. ¿Quieres recuperarla?`;
+    `Hay una reunión sin terminar del ${cuando}, con ${n} ${n === 1 ? 'frase' : 'frases'}.`;
   el.recuperar.hidden = false;
+  registrar(`Al abrir: hay una reunión sin terminar guardada (${n} frases).`);
 }
 
 function recuperarCopia() {
@@ -692,22 +1000,34 @@ function recuperarCopia() {
       original: s.original,
       traduccion: typeof s.traduccion === 'string' ? s.traduccion : null,
     }));
+  // La frase que se estaba diciendo cuando se cerró también se recupera.
+  if (typeof copia.provisional === 'string' && copia.provisional.trim()) {
+    segmentos.push({
+      id: segmentos.length + 1,
+      hora: copia.guardada || new Date().toISOString(),
+      original: copia.provisional.trim(),
+      traduccion: null,
+    });
+  }
   siguienteId = segmentos.length + 1;
   inicioSesion = copia.inicio || (segmentos[0] && segmentos[0].hora) || null;
   if ([...el.selOrigen.options].some((o) => o.value === copia.origen)) el.selOrigen.value = copia.origen;
   if ([...el.selDestino.options].some((o) => o.value === copia.destino)) el.selDestino.value = copia.destino;
   cola.length = 0;
+  hayCambios = true;
   pintarTodo();
   actualizarControles();
   prepararTraductor();
+  registrar(`Reunión anterior recuperada (${segmentos.length} frases).`);
 }
 
 function descartarCopia() {
-  if (!confirm('Se borrará la transcripción guardada y no se podrá recuperar. ¿Continuar?')) return;
+  if (!confirm('Se borrará la reunión guardada y no se podrá recuperar. ¿Continuar?')) return;
   copiaPendiente = null;
   el.recuperar.hidden = true;
   localStorage.removeItem(CLAVE_COPIA);
   actualizarControles();
+  registrar('Reunión anterior descartada.');
 }
 
 function borrarTodo() {
@@ -718,6 +1038,7 @@ function borrarTodo() {
   cola.length = 0;
   filasPorId.clear();
   filaProv = null;
+  ultimaFrase = { norm: '', t: 0 };
   el.filas.textContent = '';
   localStorage.removeItem(CLAVE_COPIA);
   hayCambios = false;
@@ -777,7 +1098,7 @@ function probarTexto() {
   if (estadoTrad === 'descargable') prepararTraductor();
   const separador = new Intl.Segmenter(codigoOrigen(), { granularity: 'sentence' });
   for (const linea of texto.split(/\n+/)) {
-    for (const trozo of separador.segment(linea)) confirmarFrase(trozo.segment);
+    for (const trozo of separador.segment(linea)) confirmarFrase(trozo.segment, false);
   }
   el.filas.scrollTop = el.filas.scrollHeight;
 }
@@ -795,7 +1116,9 @@ el.btnDescartar.addEventListener('click', descartarCopia);
 el.btnPrueba.addEventListener('click', probarTexto);
 
 setInterval(guardarCopia, GUARDAR_CADA_MS);
+setInterval(vigilar, 500);
 window.addEventListener('pagehide', guardarCopia);
+registrar(`App abierta · versión ${VERSION_APP}.`);
 
 if (!(window.SpeechRecognition || window.webkitSpeechRecognition)) {
   mostrarMensaje('Este navegador no tiene reconocimiento de voz: solo funcionará el modo de prueba. Usa Google Chrome.');
@@ -803,5 +1126,5 @@ if (!(window.SpeechRecognition || window.webkitSpeechRecognition)) {
   mostrarMensaje(AVISO_NO_ES_CHROME);
 }
 ofrecerRecuperacion();
-actualizarControles();
+pintarEscucha();
 prepararTraductor();

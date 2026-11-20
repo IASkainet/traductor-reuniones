@@ -45,9 +45,12 @@
       </label>
     </div>
 
-    <div class="acciones">
-      <button id="btnDescargar" type="button" disabled>Descargar .md</button>
-      <button id="btnBorrar" type="button" disabled>Borrar todo</button>
+    <div class="derecha">
+      <div class="acciones">
+        <button id="btnDescargar" type="button" disabled>Descargar .md</button>
+        <button id="btnBorrar" type="button" disabled>Borrar todo</button>
+      </div>
+      <button id="btnMenu" class="btn-menu" type="button" aria-label="Más opciones" title="Más opciones">⋮</button>
     </div>
   </header>
 
@@ -61,7 +64,7 @@
 
   <div id="recuperar" class="recuperar" hidden>
     <span id="recuperarTexto"></span>
-    <button id="btnRecuperar" type="button">Recuperar</button>
+    <button id="btnRecuperar" type="button">Recuperar la reunión anterior</button>
     <button id="btnDescartar" type="button">Descartar</button>
   </div>
 
@@ -81,6 +84,40 @@
     </div>
   </details>
 
+  <!-- Aviso grande a pantalla completa (la escucha se ha parado o se ha cortado) -->
+  <div id="alarma" class="alarma" role="alertdialog" aria-modal="true" aria-labelledby="alarmaTitulo" hidden>
+    <div class="alarma-caja">
+      <h2 id="alarmaTitulo"></h2>
+      <p id="alarmaTexto"></p>
+      <div id="alarmaBotones" class="alarma-botones"></div>
+    </div>
+  </div>
+
+  <dialog id="dlgMenu" class="ventana">
+    <h2>Más opciones</h2>
+    <div class="menu-lista">
+      <button id="btnAbrirDiario" type="button">Registro de diagnóstico</button>
+    </div>
+    <p id="versionApp" class="nota"></p>
+    <div class="ventana-botones">
+      <button id="btnCerrarMenu" type="button">Cerrar</button>
+    </div>
+  </dialog>
+
+  <dialog id="dlgDiario" class="ventana ventana-ancha">
+    <h2>Registro de diagnóstico</h2>
+    <p class="nota">Hora de cada corte o parada de la escucha, el motivo y si se reanudó. No incluye nada de lo que se dice en la reunión. Si algo falla, pulsa «Copiar» y pégalo en el chat con Claude.</p>
+    <textarea id="txtDiario" readonly spellcheck="false" aria-label="Registro de diagnóstico"></textarea>
+    <p id="avisoCopiaDiario" class="nota" role="status"></p>
+    <div class="ventana-botones">
+      <button id="btnCopiarDiario" type="button" class="destacado">Copiar</button>
+      <button id="btnBorrarDiario" type="button">Borrar registro</button>
+      <button id="btnCerrarDiario" type="button">Cerrar</button>
+    </div>
+  </dialog>
+
+  <script src="diagnostico.js"></script>
+  <script src="avisos.js"></script>
   <script src="app.js"></script>
 </body>
 </html>

@@ -10,6 +10,7 @@
   --verde: #15803d;
   --rojo: #c81e1e;
   --ambar: #b45309;
+  --ambar-vivo: #f59e0b;
 }
 
 * { box-sizing: border-box; }
@@ -86,32 +87,64 @@ select {
 .indicador {
   display: flex;
   align-items: center;
-  gap: 0.5rem;
-  min-width: 9.5rem;
-  font-size: 1.1rem;
-  font-weight: 600;
-  color: #666;
+  justify-content: center;
+  gap: 0.6rem;
+  min-width: 12rem;
+  padding: 0.5rem 1.2rem;
+  border-radius: 999px;
+  background: #e7e5e4;
+  color: #44403c;
+  font-size: 1.3rem;
+  font-weight: 800;
+  letter-spacing: 0.01em;
 }
 .punto {
+  flex: none;
   width: 1rem;
   height: 1rem;
   border-radius: 50%;
-  background: #bbb;
+  background: #a8a29e;
 }
-.indicador[data-estado="escuchando"] { color: var(--rojo); }
+/* Verde: escuchando. Ámbar: arrancando o reanudando. Rojo: se ha parado sola. */
+.indicador[data-estado="escuchando"] { background: var(--verde); color: #fff; }
 .indicador[data-estado="escuchando"] .punto {
-  background: var(--rojo);
+  background: #fff;
   animation: latido 1.2s ease-in-out infinite;
 }
-.indicador[data-estado="reconectando"] { color: var(--ambar); }
-.indicador[data-estado="reconectando"] .punto { background: var(--ambar); }
+.indicador[data-estado="reanudando"],
+.indicador[data-estado="arrancando"] { background: var(--ambar-vivo); color: #1c1917; }
+.indicador[data-estado="reanudando"] .punto,
+.indicador[data-estado="arrancando"] .punto { background: #1c1917; }
+.indicador[data-estado="cortado"] {
+  background: var(--rojo);
+  color: #fff;
+  animation: parpadeo 1s steps(2, start) infinite;
+}
+.indicador[data-estado="cortado"] .punto { background: #fff; }
 
+/* Marco de color alrededor de toda la pantalla, para verlo de reojo. */
+body::after {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: 40;
+  pointer-events: none;
+  border: 0 solid transparent;
+}
+body[data-escucha="escuchando"]::after { border-width: 5px; border-color: var(--verde); }
+body[data-escucha="reanudando"]::after,
+body[data-escucha="arrancando"]::after { border-width: 8px; border-color: var(--ambar-vivo); }
+body[data-escucha="cortado"]::after { border-width: 10px; border-color: var(--rojo); }
+
+@keyframes parpadeo {
+  50% { opacity: 0.55; }
+}
 @keyframes latido {
   0%, 100% { transform: scale(1); opacity: 1; }
   50% { transform: scale(1.5); opacity: 0.45; }
 }
 @media (prefers-reduced-motion: reduce) {
-  .indicador .punto { animation: none !important; }
+  .indicador, .indicador .punto { animation: none !important; }
 }
 
 .idiomas {
@@ -120,10 +153,23 @@ select {
   align-items: center;
   gap: 0.5rem;
 }
+.derecha {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-left: auto;
+}
 .acciones {
   display: flex;
   gap: 0.5rem;
-  margin-left: auto;
+}
+.btn-menu {
+  min-width: 2.9rem;
+  min-height: 2.9rem;
+  padding: 0.2rem 0.6rem;
+  font-size: 1.5rem;
+  font-weight: 800;
+  line-height: 1;
 }
 
 /* --- Franjas de estado y mensajes --- */
@@ -231,8 +277,7 @@ main {
   .aviso { padding: 0.2rem 0.6rem; font-size: 0.8rem; }
   .barra { gap: 0.4rem 0.6rem; padding: 0.4rem 0.6rem; }
   .btn-principal { min-width: 7rem; padding: 0.55rem 1.2rem; font-size: 1.15rem; }
-  .indicador { min-width: 0; font-size: 1rem; }
-  .acciones { margin-left: 0; }
+  .indicador { min-width: 0; padding: 0.4rem 0.9rem; font-size: 1.1rem; }
   .estado, .mensaje, .recuperar { padding: 0.3rem 0.6rem; font-size: 0.85rem; }
   .cabecera-columnas, .fila { column-gap: 0.6rem; padding-left: 0.6rem; padding-right: 0.6rem; }
   .fila .trad { padding-left: 0.6rem; }
@@ -256,3 +301,85 @@ main {
   .fila .trad { border-left: 3px solid var(--verde); padding-left: 0.6rem; }
   .fila .trad.fallo { display: none; }
 }
+
+/* --- Aviso grande a pantalla completa --- */
+.alarma {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1.5rem;
+  background: rgba(153, 27, 27, 0.95);
+  color: #fff;
+}
+.alarma[data-tipo="vuelta"] { background: rgba(120, 53, 15, 0.95); }
+.alarma-caja {
+  max-width: 44rem;
+  text-align: center;
+}
+.alarma h2 {
+  margin: 0 0 1rem;
+  font-size: clamp(2rem, 1.2rem + 4vw, 3.6rem);
+  line-height: 1.1;
+}
+.alarma p {
+  margin: 0 0 2rem;
+  font-size: clamp(1.15rem, 1rem + 1vw, 1.6rem);
+  line-height: 1.4;
+}
+.alarma-botones {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 1rem;
+}
+.alarma-botones button {
+  min-width: 12rem;
+  padding: 1rem 1.6rem;
+  border: 2px solid #fff;
+  border-radius: 14px;
+  background: transparent;
+  color: #fff;
+  font-size: 1.3rem;
+  font-weight: 700;
+}
+.alarma-botones button:hover { background: rgba(255, 255, 255, 0.12); }
+.alarma-botones button.principal { background: #fff; color: #111; }
+.alarma-botones button.principal:hover { background: #f1f1f1; }
+
+/* --- Ventanas (menú y registro de diagnóstico) --- */
+.ventana {
+  width: min(30rem, calc(100vw - 2rem));
+  padding: 1.25rem 1.5rem;
+  border: none;
+  border-radius: 14px;
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.3);
+}
+.ventana-ancha { width: min(52rem, calc(100vw - 2rem)); }
+.ventana::backdrop { background: rgba(0, 0, 0, 0.45); }
+.ventana h2 { margin: 0 0 0.75rem; font-size: 1.35rem; }
+.ventana .nota { margin: 0.5rem 0; color: #555; font-size: 0.95rem; }
+.menu-lista { display: flex; flex-direction: column; gap: 0.5rem; }
+.menu-lista button { padding: 0.9rem 1rem; text-align: left; font-size: 1.1rem; }
+.ventana textarea {
+  width: 100%;
+  height: min(55vh, 30rem);
+  padding: 0.6rem;
+  border: 1px solid #bbb;
+  border-radius: 8px;
+  font: 0.85rem/1.45 ui-monospace, Consolas, monospace;
+  white-space: pre;
+  resize: vertical;
+}
+.ventana-botones {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 0.5rem;
+  margin-top: 0.75rem;
+}
+.ventana-botones button { padding: 0.7rem 1.1rem; }
+.ventana-botones .destacado { background: var(--verde); border-color: var(--verde); color: #fff; }
+.ventana-botones .destacado:hover { background: #166534; }
