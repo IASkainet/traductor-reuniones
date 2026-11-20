@@ -4,7 +4,7 @@
    y si se reanudó, para poder averiguar qué falla. Solo guarda datos técnicos (horas y
    motivos), nunca frases de la reunión. Se queda en este aparato. */
 
-const VERSION_APP = '1.2 · fase 2 (modos e idiomas)';
+const VERSION_APP = '1.3 · fase 3 (interlocutores)';
 const CLAVE_DIARIO = 'traductorReuniones.diagnostico';
 const MAX_DIARIO = 500; // entradas que se conservan (las más antiguas se van borrando)
 

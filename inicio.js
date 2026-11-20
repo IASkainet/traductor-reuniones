@@ -114,6 +114,8 @@ function empezarReunion(modo) {
     inicio: new Date().toISOString(),
     fin: null,
     vozAnterior: null, // para volver al mismo acento al invertir dos veces
+    interlocutores: interlocutoresIniciales(), // en interlocutores.js
+    activo: null,      // nadie elegido: las frases quedan «Sin asignar»
   };
   segmentos = [];
   siguienteId = 1;
@@ -132,6 +134,7 @@ function empezarReunion(modo) {
 function abrirReunion() {
   document.body.dataset.modo = reunion.modo;
   mostrarPantalla('reunion');
+  pintarBarraInterlocutores();
   if (esTraduccion()) prepararTraductor();
   else soltarTraductor();
   pintarEscucha();
@@ -148,6 +151,7 @@ function normalizarReunion(copia) {
     if (destino === origen.split('-')[0]) destino = origen.startsWith('es') ? 'fr' : 'es';
   }
   const primera = copia.segmentos && copia.segmentos[0] && copia.segmentos[0].hora;
+  const interlocutores = normalizarInterlocutores(r.interlocutores);
   return {
     ...r,
     modo,
@@ -156,6 +160,8 @@ function normalizarReunion(copia) {
     inicio: r.inicio || copia.inicio || primera || new Date().toISOString(),
     fin: r.fin || null,
     vozAnterior: r.vozAnterior || null,
+    interlocutores,
+    activo: interlocutores.some((x) => x.id === r.activo) ? r.activo : null,
   };
 }
 

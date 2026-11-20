@@ -94,6 +94,8 @@
       </div>
       <div id="filas" class="filas"></div>
     </main>
+
+    <div id="barraInterlocutores" class="barra-interlocutores" role="group" aria-label="Quién habla"></div>
   </section>
 
   <!-- Aviso grande a pantalla completa (la escucha se ha parado o se ha cortado) -->
@@ -158,6 +160,17 @@
     </div>
   </dialog>
 
+  <dialog id="dlgNombres" class="ventana">
+    <h2>Nombres de los interlocutores</h2>
+    <p class="nota">Se cambian también en las frases ya dichas, y se recuerdan para la próxima reunión.</p>
+    <div id="listaNombres" class="lista-nombres"></div>
+    <div class="ventana-botones">
+      <button id="btnAnadirNombre" type="button">+ Añadir interlocutor</button>
+      <button id="btnCancelarNombres" type="button">Cancelar</button>
+      <button id="btnGuardarNombres" type="button" class="destacado">Guardar</button>
+    </div>
+  </dialog>
+
   <dialog id="dlgPrueba" class="ventana ventana-ancha">
     <h2>Modo de prueba (sin micrófono)</h2>
     <p class="nota">Pega un texto en el idioma que se escucha. Cada frase se añade a la reunión como si se hubiera oído.</p>
@@ -172,5 +185,6 @@
   <script src="avisos.js"></script>
   <script src="app.js"></script>
   <script src="inicio.js"></script>
+  <script src="interlocutores.js"></script>
 </body>
 </html>

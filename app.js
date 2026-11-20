@@ -58,8 +58,8 @@ const el = {
 };
 
 // ---------- Estado ----------
-let reunion = null;            // la reunión en curso: { modo, origen, destino, inicio, fin, vozAnterior }
-let segmentos = [];            // frases confirmadas: {id, hora, original, traduccion, origen, destino}
+let reunion = null;            // la reunión en curso: { modo, origen, destino, inicio, fin, vozAnterior, interlocutores, activo }
+let segmentos = [];            // frases confirmadas: {id, hora, original, traduccion, origen, destino, interlocutor}
 let pantalla = 'inicio';       // la pantalla que se ve: inicio | reunion
 let siguienteId = 1;
 let hayCambios = false;        // hay algo sin guardar en la copia de seguridad
@@ -157,16 +157,28 @@ function conScroll(cambio) {
   if (pegadoAbajo) c.scrollTop = c.scrollHeight;
 }
 
+// Cada fila tiene dos celdas (original y traducción), y en cada una el nombre de quien habla.
 function crearFila() {
   const fila = document.createElement('div');
   fila.className = 'fila';
-  const orig = document.createElement('div');
-  orig.className = 'orig provisional';
-  const trad = document.createElement('div');
-  trad.className = 'trad provisional';
-  fila.append(orig, trad);
+  const celdas = ['orig', 'trad'].map((tipo) => {
+    const celda = document.createElement('div');
+    celda.className = `celda celda-${tipo}`;
+    const quien = document.createElement('span');
+    quien.className = 'quien';
+    const texto = document.createElement('div');
+    texto.className = `${tipo} provisional`;
+    celda.append(quien, texto);
+    fila.append(celda);
+    return { quien, texto };
+  });
   el.filas.append(fila);
-  return { el: fila, orig, trad, texto: '', seg: null, tradFinal: false };
+  const nueva = {
+    el: fila, orig: celdas[0].texto, trad: celdas[1].texto, quien: [celdas[0].quien, celdas[1].quien],
+    texto: '', seg: null, tradFinal: false,
+  };
+  pintarQuien(nueva, reunion ? reunion.activo : null); // en interlocutores.js
+  return nueva;
 }
 
 // Texto provisional (gris): se va corrigiendo solo mientras se habla.
@@ -220,6 +232,7 @@ function confirmarFrase(texto, comprobarRepetida = true) {
     traduccion: null,
     origen: codigoOrigen(),                           // idioma en que se dijo
     destino: esTraduccion() ? reunion.destino : null, // idioma al que se traduce (o ninguno)
+    interlocutor: reunion.activo,                     // quien habla (null = «Sin asignar»)
   };
   segmentos.push(seg);
   hayCambios = true;
@@ -241,6 +254,7 @@ function confirmarFrase(texto, comprobarRepetida = true) {
 
 function pintarOriginalFinal(fila, seg) {
   fila.seg = seg;
+  pintarQuien(fila, seg.interlocutor);
   fila.texto = seg.original;
   fila.orig.textContent = seg.original;
   fila.orig.classList.remove('provisional');
@@ -1044,6 +1058,7 @@ function recuperarCopia() {
       traduccion: typeof s.traduccion === 'string' ? s.traduccion : null,
       origen: s.origen || codigo,
       destino: reunion.modo === 'traduccion' ? (s.destino || reunion.destino) : null,
+      interlocutor: buscarInterlocutor(s.interlocutor) ? s.interlocutor : null,
     }));
   // La frase que se estaba diciendo cuando se cerró también se recupera.
   if (typeof copia.provisional === 'string' && copia.provisional.trim()) {
@@ -1054,6 +1069,7 @@ function recuperarCopia() {
       traduccion: null,
       origen: codigo,
       destino: reunion.modo === 'traduccion' ? reunion.destino : null,
+      interlocutor: reunion.activo,
     });
   }
   siguienteId = segmentos.length + 1;
@@ -1110,7 +1126,7 @@ function construirMarkdown() {
     '',
   ];
   segmentos.forEach((s, i) => {
-    lineas.push(`### ${i + 1} · ${horaTexto(new Date(s.hora))}`, '', `**Original:** ${s.original}`, '');
+    lineas.push(`### ${i + 1} · ${horaTexto(new Date(s.hora))} · ${nombreDe(s.interlocutor)}`, '', `**Original:** ${s.original}`, '');
     if (s.destino) lineas.push(`**Traducción:** ${s.traduccion ?? '_(sin traducción)_'}`, '');
   });
   return lineas.join('\n');
