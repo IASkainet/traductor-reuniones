@@ -73,10 +73,7 @@
       </div>
 
       <div class="derecha">
-        <div class="acciones">
-          <button id="btnDescargar" type="button" disabled>Descargar .md</button>
-          <button id="btnNueva" type="button">Nueva reunión</button>
-        </div>
+        <button id="btnTerminar" class="btn-terminar" type="button" title="Para la escucha y pasa a revisar la reunión y sacar el acta">Terminar</button>
         <button class="btn-menu" type="button" aria-label="Más opciones" title="Más opciones">⋮</button>
       </div>
     </header>
@@ -96,6 +93,33 @@
     </main>
 
     <div id="barraInterlocutores" class="barra-interlocutores" role="group" aria-label="Quién habla"></div>
+  </section>
+
+  <!-- ===================== Revisión y acta ===================== -->
+  <section id="pantallaRevision" class="pantalla pantalla-revision" hidden>
+    <header class="barra">
+      <button id="btnVolverReunion" type="button">← Volver a la reunión</button>
+      <h1>Revisión</h1>
+      <span id="revResumen" class="rev-resumen"></span>
+      <div class="derecha">
+        <div class="acciones-acta">
+          <button id="btnCopiarActa" type="button" class="destacado">Copiar acta</button>
+          <button id="btnDescargarActa" type="button" class="destacado">Descargar .md</button>
+          <button id="btnNuevaReunion" type="button">Nueva reunión</button>
+        </div>
+        <button class="btn-menu" type="button" aria-label="Más opciones" title="Más opciones">⋮</button>
+      </div>
+    </header>
+    <div class="rev-ayuda">
+      <span>Toca una frase para cambiar quién habla o corregir el texto. Para asignar varias seguidas: toca la primera, elige «Seleccionar tramo desde aquí» y toca la última.</span>
+      <button id="btnNombresRevision" type="button">✎ Nombres</button>
+    </div>
+    <div id="revTramo" class="rev-tramo" role="status" hidden>
+      <span id="revTramoTexto"></span>
+      <button id="btnCancelarTramo" type="button">Cancelar tramo</button>
+    </div>
+    <p id="revAviso" class="rev-aviso" role="status"></p>
+    <div id="revLista" class="rev-lista"></div>
   </section>
 
   <!-- Aviso grande a pantalla completa (la escucha se ha parado o se ha cortado) -->
@@ -171,6 +195,39 @@
     </div>
   </dialog>
 
+  <dialog id="dlgFrase" class="ventana ventana-ancha">
+    <h2 id="dlgFraseTitulo"></h2>
+    <p id="dlgFraseTexto" class="frase-muestra"></p>
+    <p class="nota">¿Quién habla?</p>
+    <div id="dlgFraseQuien" class="frase-quien"></div>
+    <div class="ventana-botones">
+      <span id="dlgFraseUna" class="botones-una">
+        <button id="btnEditarFrase" type="button">Corregir texto</button>
+        <button id="btnTramoDesdeAqui" type="button">Seleccionar tramo desde aquí</button>
+      </span>
+      <button id="btnCancelarFrase" type="button">Cancelar</button>
+    </div>
+  </dialog>
+
+  <dialog id="dlgEditar" class="ventana ventana-ancha">
+    <h2>Corregir la frase</h2>
+    <div class="campos">
+      <label>Lo que se dijo
+        <textarea id="editOriginal" rows="3"></textarea>
+      </label>
+      <label id="filaEditTraduccion">Traducción
+        <textarea id="editTraduccion" rows="3"></textarea>
+      </label>
+    </div>
+    <p class="nota">Si dejas vacío «Lo que se dijo», se ofrece borrar la frase.</p>
+    <p id="editAviso" class="nota" role="status"></p>
+    <div class="ventana-botones">
+      <button id="btnRetraducir" type="button">Volver a traducir</button>
+      <button id="btnCancelarEdicion" type="button">Cancelar</button>
+      <button id="btnGuardarEdicion" type="button" class="destacado">Guardar</button>
+    </div>
+  </dialog>
+
   <dialog id="dlgPrueba" class="ventana ventana-ancha">
     <h2>Modo de prueba (sin micrófono)</h2>
     <p class="nota">Pega un texto en el idioma que se escucha. Cada frase se añade a la reunión como si se hubiera oído.</p>
@@ -186,5 +243,6 @@
   <script src="app.js"></script>
   <script src="inicio.js"></script>
   <script src="interlocutores.js"></script>
+  <script src="revision.js"></script>
 </body>
 </html>

@@ -38,8 +38,6 @@ const el = {
   indicadorTexto: $('indicadorTexto'),
   txtIdiomasActuales: $('txtIdiomasActuales'),
   btnInvertir: $('btnInvertir'),
-  btnDescargar: $('btnDescargar'),
-  btnNueva: $('btnNueva'),
   estadoTrad: $('estadoTraductor'),
   estadoTradTexto: $('estadoTraductorTexto'),
   barraProgreso: $('barraProgreso'),
@@ -60,7 +58,7 @@ const el = {
 // ---------- Estado ----------
 let reunion = null;            // la reunión en curso: { modo, origen, destino, inicio, fin, vozAnterior, interlocutores, activo }
 let segmentos = [];            // frases confirmadas: {id, hora, original, traduccion, origen, destino, interlocutor}
-let pantalla = 'inicio';       // la pantalla que se ve: inicio | reunion
+let pantalla = 'inicio';       // la pantalla que se ve: inicio | reunion | revision
 let siguienteId = 1;
 let hayCambios = false;        // hay algo sin guardar en la copia de seguridad
 let copiaPendiente = null;     // copia antigua a la espera de Recuperar/Descartar
@@ -133,7 +131,6 @@ function ocultarMensaje() {
 function actualizarControles() {
   // Mientras haya una reunión guardada sin decidir (Recuperar / Descartar) no se empieza otra.
   for (const b of document.querySelectorAll('.btn-modo')) b.disabled = !!copiaPendiente;
-  el.btnDescargar.disabled = segmentos.length === 0;
   if (!reunion) return;
   document.body.dataset.modo = reunion.modo;
   if (esTraduccion()) {
@@ -271,6 +268,7 @@ function pintarTraduccionFinal(seg, texto) {
     fila.trad.classList.remove('provisional');
     fila.trad.classList.toggle('fallo', texto == null);
   });
+  if (pantalla === 'revision') actualizarTraduccionRevision(seg); // en revision.js
 }
 
 // Vuelve a dibujar todo (al recuperar una copia de seguridad).
@@ -1109,46 +1107,6 @@ function cerrarReunion() {
   actualizarControles();
 }
 
-// ---------- Descarga en Markdown ----------
-
-function construirMarkdown() {
-  const inicio = new Date(reunion.inicio);
-  const lineas = [
-    '# Transcripción de reunión',
-    '',
-    `- **Fecha y hora:** ${fechaTexto(inicio)}`,
-    esTraduccion()
-      ? `- **Modo:** Traducción · ${nombreOrigen()} → ${nombreDestino()}`
-      : `- **Modo:** Reunión · ${nombreOrigen()}`,
-    `- **Frases:** ${segmentos.length}`,
-    '',
-    '---',
-    '',
-  ];
-  segmentos.forEach((s, i) => {
-    lineas.push(`### ${i + 1} · ${horaTexto(new Date(s.hora))} · ${nombreDe(s.interlocutor)}`, '', `**Original:** ${s.original}`, '');
-    if (s.destino) lineas.push(`**Traducción:** ${s.traduccion ?? '_(sin traducción)_'}`, '');
-  });
-  return lineas.join('\n');
-}
-
-function nombreArchivo() {
-  const d = new Date(reunion.inicio);
-  return `reunion_${d.getFullYear()}-${dos(d.getMonth() + 1)}-${dos(d.getDate())}_${dos(d.getHours())}-${dos(d.getMinutes())}.md`;
-}
-
-function descargarMarkdown() {
-  if (!reunion || !segmentos.length) return;
-  const url = URL.createObjectURL(new Blob([construirMarkdown()], { type: 'text/markdown;charset=utf-8' }));
-  const enlace = document.createElement('a');
-  enlace.href = url;
-  enlace.download = nombreArchivo();
-  document.body.append(enlace);
-  enlace.click();
-  enlace.remove();
-  setTimeout(() => URL.revokeObjectURL(url), 10000);
-}
-
 // ---------- Modo de prueba ----------
 
 // Parte el texto pegado en frases y las mete por el mismo camino que las del micrófono.
@@ -1170,18 +1128,13 @@ function probarTexto() {
 
 el.btnEscuchar.addEventListener('click', () => (quiereEscuchar ? pararEscucha() : iniciarEscucha()));
 el.btnPrepararTraductor.addEventListener('click', () => prepararTraductor(0, true));
-el.btnDescargar.addEventListener('click', descargarMarkdown);
-el.btnNueva.addEventListener('click', () => {
-  if (segmentos.length && !confirm('Se cerrará esta reunión y se borrará de este aparato. Si quieres guardarla, descárgala antes. ¿Continuar?')) return;
-  cerrarReunion();
-});
 el.btnRecuperar.addEventListener('click', recuperarCopia);
 el.btnDescartar.addEventListener('click', descartarCopia);
 el.btnPrueba.addEventListener('click', probarTexto);
 $('btnAbrirPrueba').addEventListener('click', () => {
   $('dlgMenu').close();
-  if (!reunion) {
-    alert('Primero empieza una reunión (Traducción o Reunión): el modo de prueba añade frases a esa reunión.');
+  if (!reunion || pantalla !== 'reunion') {
+    alert('El modo de prueba añade frases a la reunión en curso: ábrelo desde la pantalla de la reunión.');
     return;
   }
   el.dlgPrueba.showModal();

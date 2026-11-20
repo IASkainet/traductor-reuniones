@@ -130,13 +130,18 @@ function empezarReunion(modo) {
   iniciarEscucha();
 }
 
-// Enseña la pantalla de la reunión en curso (también al recuperarla).
-function abrirReunion() {
+// Enseña la reunión en curso (también al recuperarla): su pantalla o, si ya se
+// había terminado, la revisión.
+function abrirReunion(destino = 'reunion') {
   document.body.dataset.modo = reunion.modo;
-  mostrarPantalla('reunion');
-  pintarBarraInterlocutores();
   if (esTraduccion()) prepararTraductor();
   else soltarTraductor();
+  if (destino === 'revision') {
+    abrirRevision(); // en revision.js
+    return;
+  }
+  mostrarPantalla('reunion');
+  pintarBarraInterlocutores();
   pintarEscucha();
 }
 

@@ -293,7 +293,6 @@ main {
 
   /* Mientras se escucha se esconde lo que no hace falta, para dejar sitio al texto. */
   body.escuchando .idiomas-actuales,
-  body.escuchando .acciones,
   body.escuchando .estado[data-estado="listo"] { display: none; }
 }
 
@@ -369,7 +368,7 @@ body[data-modo="reunion"] .filas:empty::before { content: "Lo que se oiga aparec
 .ventana .nota { margin: 0.5rem 0; color: #555; font-size: 0.95rem; }
 .menu-lista { display: flex; flex-direction: column; gap: 0.5rem; }
 .menu-lista button { padding: 0.9rem 1rem; text-align: left; font-size: 1.1rem; }
-.ventana textarea {
+#txtDiario {
   width: 100%;
   height: min(55vh, 30rem);
   padding: 0.6rem;
@@ -496,7 +495,7 @@ body[data-modo="reunion"] .filas:empty::before { content: "Lo que se oiga aparec
 .item-preparar[data-estado="error"] { border-left-color: var(--rojo); }
 .item-preparar[data-estado="nodisp"] .item-estado,
 .item-preparar[data-estado="error"] .item-estado { color: var(--rojo); }
-.ventana textarea#textoPrueba { height: auto; white-space: pre-wrap; font: inherit; }
+
 
 /* --- Interlocutores (barra de abajo en la reunión) --- */
 .barra-interlocutores {
@@ -542,4 +541,85 @@ body[data-modo="reunion"] .filas:empty::before { content: "Lo que se oiga aparec
   border-radius: 8px;
   font: inherit;
   font-size: 1.1rem;
+}
+
+/* --- Botón Terminar (reunión) --- */
+.btn-terminar {
+  min-height: 3rem;
+  padding: 0.6rem 1.3rem;
+  border: 2px solid #1c1917;
+  font-size: 1.15rem;
+  font-weight: 800;
+}
+
+/* --- Revisión --- */
+.pantalla-revision .barra h1 { margin: 0; font-size: 1.4rem; }
+.rev-resumen { color: #555; font-weight: 600; }
+.acciones-acta { display: flex; flex-wrap: wrap; gap: 0.5rem; }
+.acciones-acta button { min-height: 3rem; padding: 0.6rem 1.1rem; font-weight: 700; }
+.acciones-acta .destacado { background: var(--verde); border-color: var(--verde); color: #fff; }
+.acciones-acta .destacado:hover:not(:disabled) { background: #166534; }
+.rev-ayuda, .rev-tramo {
+  flex: none;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem 1rem;
+  padding: 0.5rem 1rem;
+  border-bottom: 1px solid var(--borde);
+  background: var(--fondo-suave);
+  color: #444;
+}
+.rev-ayuda button { margin-left: auto; min-height: 2.8rem; }
+.rev-tramo { background: #e0f2fe; color: #0c4a6e; font-weight: 700; }
+.rev-aviso { flex: none; margin: 0; padding: 0 1rem; color: var(--verde); font-weight: 700; }
+.rev-aviso:empty { display: none; }
+.rev-lista {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 0.5rem 1rem 2rem;
+}
+.rev-fila {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  width: 100%;
+  margin: 0 0 0.5rem;
+  padding: 0.6rem 0.9rem;
+  border: 1px solid var(--borde);
+  border-left: 6px solid var(--color);
+  border-radius: 10px;
+  background: #fff;
+  text-align: left;
+  font-size: clamp(1.05rem, 0.9rem + 0.6vw, 1.35rem);
+  line-height: 1.35;
+}
+.rev-fila.sin-asignar { border-left-style: dashed; }
+.rev-fila.marcada { outline: 3px solid #0284c7; background: #f0f9ff; }
+.rev-cabeza { display: flex; flex-wrap: wrap; align-items: baseline; gap: 0.3rem 0.8rem; }
+.rev-quien { color: var(--color); font-weight: 800; }
+.rev-fila.sin-asignar .rev-quien { font-style: italic; }
+.rev-hora { color: #777; font-size: 0.8em; }
+.rev-trad { color: #555; }
+.rev-trad::before { content: "→ "; color: #999; }
+
+/* --- Ventanas de frase y edición --- */
+.frase-muestra {
+  margin: 0 0 0.75rem;
+  padding: 0.6rem 0.8rem;
+  border-radius: 8px;
+  background: var(--fondo-suave);
+  font-size: 1.1rem;
+}
+.frase-quien { display: flex; flex-wrap: wrap; gap: 0.5rem; }
+.botones-una { display: flex; flex-wrap: wrap; gap: 0.5rem; margin-right: auto; }
+.campos textarea, #textoPrueba {
+  width: 100%;
+  padding: 0.6rem;
+  border: 1px solid #bbb;
+  border-radius: 8px;
+  font: inherit;
+  font-size: 1.1rem;
+  resize: vertical;
 }
