@@ -8,81 +8,93 @@
   <link rel="icon" href="data:,">
   <link rel="stylesheet" href="estilos.css">
 </head>
-<body>
+<body data-pantalla="inicio" data-modo="traduccion">
 
   <div class="aviso" role="note">Informa a los asistentes de que se transcribe la reunión.</div>
 
-  <header class="barra">
-    <button id="btnEscuchar" class="btn-principal" type="button">Iniciar</button>
-
-    <div id="indicador" class="indicador" data-estado="parado" role="status">
-      <span class="punto" aria-hidden="true"></span>
-      <span id="indicadorTexto">Parado</span>
-    </div>
-
-    <div class="idiomas">
-      <label>Se habla en
-        <select id="selOrigen">
-          <option value="fr-FR" selected>Francés</option>
-          <option value="en-US">Inglés (EE. UU.)</option>
-          <option value="en-GB">Inglés (Reino Unido)</option>
-          <option value="de-DE">Alemán</option>
-          <option value="it-IT">Italiano</option>
-          <option value="pt-PT">Portugués</option>
-          <option value="es-ES">Español</option>
-        </select>
-      </label>
-      <span aria-hidden="true">→</span>
-      <label>Traducir a
-        <select id="selDestino">
-          <option value="es" selected>Español</option>
-          <option value="en">Inglés</option>
-          <option value="fr">Francés</option>
-          <option value="de">Alemán</option>
-          <option value="it">Italiano</option>
-          <option value="pt">Portugués</option>
-        </select>
-      </label>
-    </div>
-
-    <div class="derecha">
-      <div class="acciones">
-        <button id="btnDescargar" type="button" disabled>Descargar .md</button>
-        <button id="btnBorrar" type="button" disabled>Borrar todo</button>
-      </div>
-      <button id="btnMenu" class="btn-menu" type="button" aria-label="Más opciones" title="Más opciones">⋮</button>
-    </div>
-  </header>
-
-  <div id="estadoTraductor" class="estado" data-estado="comprobando" role="status">
-    <span id="estadoTraductorTexto">Comprobando el traductor…</span>
-    <progress id="barraProgreso" max="1" value="0" hidden></progress>
-    <button id="btnPrepararTraductor" type="button" hidden>Descargar traductor</button>
-  </div>
-
   <div id="mensaje" class="mensaje" role="alert" hidden></div>
 
-  <div id="recuperar" class="recuperar" hidden>
-    <span id="recuperarTexto"></span>
-    <button id="btnRecuperar" type="button">Recuperar la reunión anterior</button>
-    <button id="btnDescartar" type="button">Descartar</button>
-  </div>
+  <!-- ===================== Pantalla de inicio ===================== -->
+  <section id="pantallaInicio" class="pantalla pantalla-inicio">
+    <header class="barra barra-inicio">
+      <h1>Traductor de reuniones</h1>
+      <div class="derecha">
+        <button class="btn-menu" type="button" aria-label="Más opciones" title="Más opciones">⋮</button>
+      </div>
+    </header>
 
-  <main>
-    <div class="cabecera-columnas">
-      <div id="tituloOrigen">Original</div>
-      <div id="tituloDestino">Traducción</div>
+    <div id="recuperar" class="recuperar" hidden>
+      <span id="recuperarTexto"></span>
+      <button id="btnRecuperar" type="button">Recuperar la reunión anterior</button>
+      <button id="btnDescartar" type="button">Descartar</button>
     </div>
-    <div id="filas" class="filas"></div>
-  </main>
 
-  <details class="prueba">
-    <summary>Modo de prueba (sin micrófono)</summary>
-    <div class="prueba-cuerpo">
-      <textarea id="textoPrueba" rows="3" placeholder="Pega aquí un texto en el idioma de origen y pulsa el botón. Cada frase se añade a la transcripción como si se hubiera oído."></textarea>
-      <button id="btnPrueba" type="button">Traducir este texto</button>
+    <div class="inicio-cuerpo">
+      <div class="modos">
+        <div class="modo" data-modo="traduccion">
+          <button id="btnModoTraduccion" class="btn-modo" type="button" data-modo="traduccion">
+            <span class="btn-modo-ultimo">Último usado</span>
+            <span class="btn-modo-titulo">Traducción</span>
+            <span id="txtParTraduccion" class="btn-modo-idiomas"></span>
+            <span class="btn-modo-detalle">Dos columnas: original y traducción</span>
+          </button>
+          <button id="btnIdiomasTraduccion" class="btn-cambiar" type="button">Cambiar idiomas</button>
+        </div>
+        <div class="modo" data-modo="reunion">
+          <button id="btnModoReunion" class="btn-modo" type="button" data-modo="reunion">
+            <span class="btn-modo-ultimo">Último usado</span>
+            <span class="btn-modo-titulo">Reunión</span>
+            <span id="txtIdiomaReunion" class="btn-modo-idiomas"></span>
+            <span class="btn-modo-detalle">Un solo idioma, sin traducción</span>
+          </button>
+          <button id="btnIdiomaReunion" class="btn-cambiar" type="button">Cambiar idioma</button>
+        </div>
+      </div>
+      <p class="inicio-nota">Toca un modo y empieza a escuchar al momento.</p>
+      <div class="inicio-pie">
+        <button id="btnPreparar" type="button">Preparar mis idiomas</button>
+      </div>
     </div>
-  </details>
+  </section>
+
+  <!-- ===================== Pantalla de la reunión ===================== -->
+  <section id="pantallaReunion" class="pantalla pantalla-reunion" hidden>
+    <header class="barra">
+      <button id="btnEscuchar" class="btn-principal" type="button">Parar</button>
+
+      <div id="indicador" class="indicador" data-estado="parado" role="status">
+        <span class="punto" aria-hidden="true"></span>
+        <span id="indicadorTexto">Parado</span>
+      </div>
+
+      <div class="idiomas-reunion">
+        <span id="txtIdiomasActuales" class="idiomas-actuales"></span>
+        <button id="btnInvertir" class="solo-traduccion" type="button" title="Cambia el sentido de la traducción (por ejemplo, de francés→español a español→francés)">⇄ Invertir</button>
+      </div>
+
+      <div class="derecha">
+        <div class="acciones">
+          <button id="btnDescargar" type="button" disabled>Descargar .md</button>
+          <button id="btnNueva" type="button">Nueva reunión</button>
+        </div>
+        <button class="btn-menu" type="button" aria-label="Más opciones" title="Más opciones">⋮</button>
+      </div>
+    </header>
+
+    <div id="estadoTraductor" class="estado solo-traduccion" data-estado="comprobando" role="status">
+      <span id="estadoTraductorTexto">Comprobando el traductor…</span>
+      <progress id="barraProgreso" max="1" value="0" hidden></progress>
+      <button id="btnPrepararTraductor" type="button" hidden>Descargar traductor</button>
+    </div>
+
+    <main>
+      <div class="cabecera-columnas">
+        <div id="tituloOrigen">Original</div>
+        <div id="tituloDestino" class="solo-traduccion">Traducción</div>
+      </div>
+      <div id="filas" class="filas"></div>
+    </main>
+  </section>
 
   <!-- Aviso grande a pantalla completa (la escucha se ha parado o se ha cortado) -->
   <div id="alarma" class="alarma" role="alertdialog" aria-modal="true" aria-labelledby="alarmaTitulo" hidden>
@@ -96,6 +108,7 @@
   <dialog id="dlgMenu" class="ventana">
     <h2>Más opciones</h2>
     <div class="menu-lista">
+      <button id="btnAbrirPrueba" type="button">Modo de prueba (sin micrófono)</button>
       <button id="btnAbrirDiario" type="button">Registro de diagnóstico</button>
     </div>
     <p id="versionApp" class="nota"></p>
@@ -116,8 +129,48 @@
     </div>
   </dialog>
 
+  <dialog id="dlgIdiomas" class="ventana">
+    <h2 id="dlgIdiomasTitulo">Idiomas</h2>
+    <div class="campos">
+      <label><span id="etiquetaOrigen">Se habla en</span>
+        <select id="selOrigen"></select>
+      </label>
+      <label id="filaDestino">Traducir a
+        <select id="selDestino"></select>
+      </label>
+    </div>
+    <p id="errorIdiomas" class="nota error" role="alert" hidden></p>
+    <div class="ventana-botones">
+      <button id="btnCancelarIdiomas" type="button">Cancelar</button>
+      <button id="btnGuardarIdiomas" type="button" class="destacado">Guardar</button>
+    </div>
+  </dialog>
+
+  <dialog id="dlgPreparar" class="ventana ventana-ancha">
+    <h2>Preparar mis idiomas</h2>
+    <p class="nota">Descarga ahora, con wifi y antes de la reunión, lo que hace falta para traducir. Solo se hace una vez por cada pareja de idiomas.</p>
+    <div id="listaPreparar" class="lista-preparar"></div>
+    <p class="nota">Reconocimiento de voz: no hay que descargar nada, pero necesita Internet durante la reunión (lo hace el servicio de Google).</p>
+    <p id="notaPreparar" class="nota" role="status"></p>
+    <div class="ventana-botones">
+      <button id="btnDescargarIdiomas" type="button" class="destacado" disabled>Descargar lo que falta</button>
+      <button id="btnCerrarPreparar" type="button">Cerrar</button>
+    </div>
+  </dialog>
+
+  <dialog id="dlgPrueba" class="ventana ventana-ancha">
+    <h2>Modo de prueba (sin micrófono)</h2>
+    <p class="nota">Pega un texto en el idioma que se escucha. Cada frase se añade a la reunión como si se hubiera oído.</p>
+    <textarea id="textoPrueba" rows="5" aria-label="Texto de prueba"></textarea>
+    <div class="ventana-botones">
+      <button id="btnCerrarPrueba" type="button">Cerrar</button>
+      <button id="btnPrueba" type="button" class="destacado">Añadir a la reunión</button>
+    </div>
+  </dialog>
+
   <script src="diagnostico.js"></script>
   <script src="avisos.js"></script>
   <script src="app.js"></script>
+  <script src="inicio.js"></script>
 </body>
 </html>

@@ -48,6 +48,14 @@ select {
   background: #fff;
 }
 
+/* --- Pantallas: inicio y reunión (solo se ve una) --- */
+.pantalla {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
 /* --- Aviso fijo --- */
 .aviso {
   flex: none;
@@ -147,12 +155,20 @@ body[data-escucha="cortado"]::after { border-width: 10px; border-color: var(--ro
   .indicador, .indicador .punto { animation: none !important; }
 }
 
-.idiomas {
+.idiomas-reunion {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 0.5rem;
+  gap: 0.5rem 0.75rem;
 }
+.idiomas-actuales { font-size: 1.1rem; font-weight: 600; color: #333; }
+#btnInvertir { font-weight: 700; }
+
+/* En el modo «Reunión» (un solo idioma) no hay nada de traducción. */
+body[data-modo="reunion"] .solo-traduccion,
+body[data-modo="reunion"] .fila .trad { display: none !important; }
+body[data-modo="reunion"] .cabecera-columnas,
+body[data-modo="reunion"] .fila { grid-template-columns: 1fr; }
 .derecha {
   display: flex;
   align-items: center;
@@ -227,7 +243,7 @@ main {
   padding-bottom: 1.5rem;
 }
 .filas:empty::before {
-  content: "Pulsa Iniciar para empezar a escuchar. Lo que se oiga aparecerá aquí, con su traducción al lado.";
+  content: "Lo que se oiga aparecerá aquí, con su traducción al lado.";
   display: block;
   padding: 2rem 1rem;
   color: #777;
@@ -249,29 +265,6 @@ main {
 
 .cabecera-columnas > div:last-child { padding-left: calc(1.5rem + 2px); }
 
-/* --- Modo de prueba --- */
-.prueba {
-  flex: none;
-  border-top: 1px solid var(--borde);
-  background: var(--fondo-suave);
-  padding: 0.5rem 1rem;
-}
-.prueba summary { cursor: pointer; font-weight: 600; color: #444; }
-.prueba-cuerpo {
-  display: flex;
-  gap: 0.75rem;
-  align-items: flex-end;
-  margin-top: 0.5rem;
-}
-.prueba textarea {
-  flex: 1;
-  min-width: 0;
-  padding: 0.5rem;
-  border: 1px solid #bbb;
-  border-radius: 8px;
-  resize: vertical;
-}
-
 /* --- Móvil (pantalla estrecha, o tumbada con poca altura): mandos compactos --- */
 @media (max-width: 640px), (max-height: 520px) {
   .aviso { padding: 0.2rem 0.6rem; font-size: 0.8rem; }
@@ -282,13 +275,10 @@ main {
   .cabecera-columnas, .fila { column-gap: 0.6rem; padding-left: 0.6rem; padding-right: 0.6rem; }
   .fila .trad { padding-left: 0.6rem; }
   .cabecera-columnas > div:last-child { padding-left: calc(0.6rem + 2px); }
-  .prueba { padding: 0.3rem 0.6rem; }
-  .prueba-cuerpo { flex-direction: column; align-items: stretch; }
 
   /* Mientras se escucha se esconde lo que no hace falta, para dejar sitio al texto. */
-  body.escuchando .idiomas,
+  body.escuchando .idiomas-actuales,
   body.escuchando .acciones,
-  body.escuchando .prueba,
   body.escuchando .estado[data-estado="listo"] { display: none; }
 }
 
@@ -301,6 +291,7 @@ main {
   .fila .trad { border-left: 3px solid var(--verde); padding-left: 0.6rem; }
   .fila .trad.fallo { display: none; }
 }
+body[data-modo="reunion"] .filas:empty::before { content: "Lo que se oiga aparecerá aquí."; }
 
 /* --- Aviso grande a pantalla completa --- */
 .alarma {
@@ -383,3 +374,111 @@ main {
 .ventana-botones button { padding: 0.7rem 1.1rem; }
 .ventana-botones .destacado { background: var(--verde); border-color: var(--verde); color: #fff; }
 .ventana-botones .destacado:hover { background: #166534; }
+
+/* --- Pantalla de inicio --- */
+.barra-inicio h1 { margin: 0; font-size: 1.4rem; }
+.inicio-cuerpo {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 1.25rem;
+  padding: 1.5rem;
+}
+.modos {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 20rem), 1fr));
+  gap: 1.5rem;
+  width: 100%;
+  max-width: 64rem;
+  margin: 0 auto;
+}
+.modo { display: flex; flex-direction: column; gap: 0.6rem; }
+.btn-modo {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  min-height: 13rem;
+  padding: 1.5rem 1rem;
+  border: none;
+  border-radius: 20px;
+  background: #1d4ed8;
+  color: #fff;
+  text-align: center;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.15);
+}
+.btn-modo:hover:not(:disabled) { background: #1e40af; }
+.modo[data-modo="reunion"] .btn-modo { background: #0f766e; }
+.modo[data-modo="reunion"] .btn-modo:hover:not(:disabled) { background: #115e59; }
+.btn-modo-titulo { font-size: clamp(2rem, 1.4rem + 2.5vw, 3rem); font-weight: 800; line-height: 1.1; }
+.btn-modo-idiomas { font-size: 1.4rem; font-weight: 700; }
+.btn-modo-detalle { font-size: 1rem; opacity: 0.85; }
+.btn-modo-ultimo {
+  position: absolute;
+  top: 0.75rem;
+  right: 0.9rem;
+  padding: 0.15rem 0.6rem;
+  border-radius: 999px;
+  background: #fde68a;
+  color: #713f12;
+  font-size: 0.85rem;
+  font-weight: 700;
+  visibility: hidden;
+}
+.modo.ultimo .btn-modo { box-shadow: 0 0 0 5px #fbbf24, 0 4px 14px rgba(0, 0, 0, 0.15); }
+.modo.ultimo .btn-modo-ultimo { visibility: visible; }
+.btn-cambiar {
+  align-self: center;
+  padding: 0.7rem 1.2rem;
+  font-size: 1.05rem;
+}
+.inicio-nota { margin: 0; text-align: center; color: #555; font-size: 1.05rem; }
+.inicio-pie {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 0.75rem;
+}
+.inicio-pie button, .inicio-pie a {
+  padding: 0.8rem 1.3rem;
+  font-size: 1.1rem;
+}
+.recuperar { justify-content: center; }
+.recuperar button { padding: 0.6rem 1rem; }
+
+/* --- Ventana de idiomas --- */
+.campos { display: flex; flex-direction: column; gap: 0.9rem; }
+.campos label { display: flex; flex-direction: column; gap: 0.3rem; font-weight: 600; }
+.campos select { padding: 0.6rem; font-size: 1.1rem; }
+.ventana .nota.error { color: #7f1d1d; font-weight: 600; }
+
+/* --- Preparar mis idiomas --- */
+.lista-preparar { display: flex; flex-direction: column; gap: 0.6rem; margin: 0.5rem 0; }
+.item-preparar {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 0.2rem 1rem;
+  padding: 0.75rem 1rem;
+  border: 1px solid var(--borde);
+  border-left: 6px solid #a8a29e;
+  border-radius: 10px;
+}
+.item-nombre { font-size: 1.15rem; font-weight: 700; }
+.item-estado { font-weight: 700; text-align: right; }
+.item-para { grid-column: 1 / -1; color: #555; font-size: 0.95rem; }
+.item-preparar progress { grid-column: 1 / -1; width: 100%; }
+.item-preparar[data-estado="listo"] { border-left-color: var(--verde); }
+.item-preparar[data-estado="listo"] .item-estado { color: var(--verde); }
+.item-preparar[data-estado="falta"] { border-left-color: var(--ambar-vivo); }
+.item-preparar[data-estado="falta"] .item-estado { color: var(--ambar); }
+.item-preparar[data-estado="descargando"] { border-left-color: #0284c7; }
+.item-preparar[data-estado="nodisp"],
+.item-preparar[data-estado="error"] { border-left-color: var(--rojo); }
+.item-preparar[data-estado="nodisp"] .item-estado,
+.item-preparar[data-estado="error"] .item-estado { color: var(--rojo); }
+.ventana textarea#textoPrueba { height: auto; white-space: pre-wrap; font: inherit; }

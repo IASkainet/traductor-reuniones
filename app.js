@@ -36,10 +36,10 @@ const el = {
   btnEscuchar: $('btnEscuchar'),
   indicador: $('indicador'),
   indicadorTexto: $('indicadorTexto'),
-  selOrigen: $('selOrigen'),
-  selDestino: $('selDestino'),
+  txtIdiomasActuales: $('txtIdiomasActuales'),
+  btnInvertir: $('btnInvertir'),
   btnDescargar: $('btnDescargar'),
-  btnBorrar: $('btnBorrar'),
+  btnNueva: $('btnNueva'),
   estadoTrad: $('estadoTraductor'),
   estadoTradTexto: $('estadoTraductorTexto'),
   barraProgreso: $('barraProgreso'),
@@ -54,11 +54,13 @@ const el = {
   filas: $('filas'),
   textoPrueba: $('textoPrueba'),
   btnPrueba: $('btnPrueba'),
+  dlgPrueba: $('dlgPrueba'),
 };
 
 // ---------- Estado ----------
-let segmentos = [];            // frases confirmadas: {id, hora, original, traduccion}
-let inicioSesion = null;       // fecha y hora de la primera frase
+let reunion = null;            // la reunión en curso: { modo, origen, destino, inicio, fin, vozAnterior }
+let segmentos = [];            // frases confirmadas: {id, hora, original, traduccion, origen, destino}
+let pantalla = 'inicio';       // la pantalla que se ve: inicio | reunion
 let siguienteId = 1;
 let hayCambios = false;        // hay algo sin guardar en la copia de seguridad
 let copiaPendiente = null;     // copia antigua a la espera de Recuperar/Descartar
@@ -67,6 +69,7 @@ const filasPorId = new Map();  // id de frase -> su fila en pantalla
 let filaProv = null;           // la fila gris (frase que aún se está diciendo)
 
 let traductor = null;
+let parTraductor = null;       // { origen, destino } del traductor cargado
 let estadoTrad = 'comprobando'; // comprobando | descargable | descargando | listo | nodisp
 let turnoTraductor = 0;
 const cola = [];               // frases confirmadas a la espera de traducción
@@ -106,9 +109,11 @@ const AVISO_NO_ES_CHROME =
 
 // ---------- Utilidades ----------
 const dos = (n) => String(n).padStart(2, '0');
-const nombreOrigen = () => el.selOrigen.selectedOptions[0].textContent.trim();
-const nombreDestino = () => el.selDestino.selectedOptions[0].textContent.trim();
-const codigoOrigen = () => el.selOrigen.value.split('-')[0];
+// Modo e idiomas de la reunión en curso (las tablas de idiomas están en inicio.js).
+const esTraduccion = () => !!reunion && reunion.modo === 'traduccion';
+const nombreOrigen = () => nombreVoz(reunion.origen);
+const nombreDestino = () => nombreCodigo(reunion.destino);
+const codigoOrigen = () => reunion.origen.split('-')[0];
 
 function fechaTexto(d) {
   return `${d.getFullYear()}-${dos(d.getMonth() + 1)}-${dos(d.getDate())} ${dos(d.getHours())}:${dos(d.getMinutes())}`;
@@ -126,15 +131,19 @@ function ocultarMensaje() {
 }
 
 function actualizarControles() {
-  const bloqueado = !!copiaPendiente;
-  el.btnEscuchar.disabled = bloqueado;
-  el.btnPrueba.disabled = bloqueado;
+  // Mientras haya una reunión guardada sin decidir (Recuperar / Descartar) no se empieza otra.
+  for (const b of document.querySelectorAll('.btn-modo')) b.disabled = !!copiaPendiente;
   el.btnDescargar.disabled = segmentos.length === 0;
-  el.btnBorrar.disabled = segmentos.length === 0;
-  el.selOrigen.disabled = quiereEscuchar;
-  el.selDestino.disabled = quiereEscuchar;
-  el.tituloOrigen.textContent = `Original · ${nombreOrigen()}`;
-  el.tituloDestino.textContent = `Traducción · ${nombreDestino()}`;
+  if (!reunion) return;
+  document.body.dataset.modo = reunion.modo;
+  if (esTraduccion()) {
+    el.txtIdiomasActuales.textContent = `${nombreOrigen()} → ${nombreDestino()}`;
+    el.tituloOrigen.textContent = `Original · ${nombreOrigen()}`;
+    el.tituloDestino.textContent = `Traducción · ${nombreDestino()}`;
+  } else {
+    el.txtIdiomasActuales.textContent = `${nombreOrigen()} · sin traducción`;
+    el.tituloOrigen.textContent = `Transcripción · ${nombreOrigen()}`;
+  }
 }
 
 // ---------- Filas en pantalla ----------
@@ -204,8 +213,14 @@ function confirmarFrase(texto, comprobarRepetida = true) {
     }
     return;
   }
-  const seg = { id: siguienteId++, hora: new Date().toISOString(), original: texto, traduccion: null };
-  if (!inicioSesion) inicioSesion = seg.hora;
+  const seg = {
+    id: siguienteId++,
+    hora: new Date().toISOString(),
+    original: texto,
+    traduccion: null,
+    origen: codigoOrigen(),                           // idioma en que se dijo
+    destino: esTraduccion() ? reunion.destino : null, // idioma al que se traduce (o ninguno)
+  };
   segmentos.push(seg);
   hayCambios = true;
   conScroll(() => {
@@ -213,7 +228,9 @@ function confirmarFrase(texto, comprobarRepetida = true) {
     filaProv = null;
     pintarOriginalFinal(fila, seg);
   });
-  if (estadoTrad === 'nodisp') {
+  if (!esTraduccion()) {
+    // modo Reunión: no hay nada que traducir
+  } else if (estadoTrad === 'nodisp') {
     pintarTraduccionFinal(seg, null);
   } else {
     cola.push(seg);
@@ -282,14 +299,22 @@ function sinTraductor(motivo, reintentable = false) {
 // Si hay que descargar el modelo, Chrome exige que sea tras un clic del usuario.
 // Donde no hay traductor de Chrome (Android), se usa el modelo que funciona en el dispositivo.
 async function prepararTraductor(intento = 0, descargaPedida = false) {
+  if (!esTraduccion()) return;
   const turno = ++turnoTraductor;
   const origen = codigoOrigen();
-  const destino = el.selDestino.value;
+  const destino = reunion.destino;
   const par = `${nombreOrigen()} → ${nombreDestino()}`;
 
+  // Si ya está cargado el de estos idiomas (de la reunión anterior), se reutiliza.
+  if (traductor && parTraductor && parTraductor.origen === origen && parTraductor.destino === destino) {
+    pintarEstadoTraductor('listo', `Traductor ${par} listo.`);
+    traducirPendientes();
+    return;
+  }
   if (traductor) {
     try { traductor.destroy(); } catch { /* da igual */ }
     traductor = null;
+    parTraductor = null;
   }
 
   if (origen === destino) {
@@ -342,6 +367,7 @@ async function prepararTraductor(intento = 0, descargaPedida = false) {
       return;
     }
     traductor = nuevo;
+    parTraductor = { origen, destino };
     pintarEstadoTraductor('listo', `Traductor ${par} listo.`);
     traducirPendientes();
   } catch (e) {
@@ -391,6 +417,7 @@ async function prepararModelo(turno, origen, destino, par, descargaPedida) {
     }
     try { localStorage.setItem(CLAVE_MODELO + clave, '1'); } catch { /* sin memoria */ }
     traductor = nuevo;
+    parTraductor = { origen, destino };
     pintarEstadoTraductor('listo', `Traductor ${par} listo (traduce dentro de este dispositivo).`);
     traducirPendientes();
   } catch (e) {
@@ -457,11 +484,25 @@ function crearTraductorEnDispositivo(origen, destino, alProgresar) {
   });
 }
 
+// ¿Esta frase se traduce con el traductor cargado? (Tras «Invertir» hay frases de los dos sentidos.)
+const esDelPar = (seg) => !!parTraductor && seg.origen === parTraductor.origen && seg.destino === parTraductor.destino;
+
 function traducirPendientes() {
   for (const seg of segmentos) {
-    if (seg.traduccion == null && !cola.includes(seg)) cola.push(seg);
+    if (seg.traduccion == null && esDelPar(seg) && !cola.includes(seg)) cola.push(seg);
   }
   procesarCola();
+}
+
+// Suelta el traductor (al pasar a una reunión sin traducción).
+function soltarTraductor() {
+  turnoTraductor++;
+  if (traductor) {
+    try { traductor.destroy(); } catch { /* da igual */ }
+  }
+  traductor = null;
+  parTraductor = null;
+  cola.length = 0;
 }
 
 // Traduce las frases confirmadas de una en una, por orden.
@@ -470,6 +511,7 @@ async function procesarCola() {
   procesandoCola = true;
   while (cola.length && traductor) {
     const seg = cola.shift();
+    if (!esDelPar(seg)) continue; // de otro sentido: se traducirá cuando vuelva ese traductor
     let texto = null;
     try {
       texto = await traductor.translate(seg.original);
@@ -535,6 +577,7 @@ const MOTIVOS = {
   'language-not-supported': 'idioma no admitido',
   'reinicio-preventivo': 'reinicio preventivo',
   'fallo-arranque': 'no se pudo arrancar',
+  'cambio-idioma': 'cambio de idioma',
 };
 const describirMotivo = (codigo) => MOTIVOS[codigo || ''] || `error «${codigo}»`;
 
@@ -558,7 +601,7 @@ function pintarEscucha() {
   el.indicador.dataset.estado = visible;
   document.body.dataset.escucha = visible;
   el.indicadorTexto.textContent = TEXTO_ESTADO[visible];
-  el.btnEscuchar.textContent = quiereEscuchar ? 'Parar' : 'Iniciar';
+  el.btnEscuchar.textContent = quiereEscuchar ? 'Parar' : 'Seguir';
   el.btnEscuchar.classList.toggle('activo', quiereEscuchar);
   document.body.classList.toggle('escuchando', quiereEscuchar); // en el móvil esconde lo que no hace falta
   actualizarControles();
@@ -630,11 +673,11 @@ function iniciarEscucha() {
   inicioEscucha = Date.now();
   reconexionesNormales = 0;
   cortesConIncidencia = 0;
-  registrar(`Iniciar · idioma ${el.selOrigen.value}${esAndroid ? ' · Android' : ''}`);
+  registrar(`Escuchar · idioma ${reunion.origen}${esAndroid ? ' · Android' : ''}`);
   ponerEstado('arrancando');
   arrancarReconocimiento();
   mantenerPantallaEncendida();
-  if (estadoTrad === 'descargable') prepararTraductor();
+  if (esTraduccion() && estadoTrad === 'descargable') prepararTraductor();
 }
 
 // Deja de escuchar. estadoFinal: 'parado' (lo has pedido) o 'cortado' (se ha parado sola).
@@ -685,14 +728,14 @@ function pararPorFallo(motivo, texto) {
 }
 
 // Abandona el reconocimiento actual y arranca otro (si Chrome se ha quedado colgado).
-function forzarReinicio() {
+function forzarReinicio(motivo = 'reinicio-preventivo') {
   const viejo = rec;
   rec = null;
   if (viejo) {
     try { viejo.abort(); } catch { /* da igual */ }
   }
   if (filaProv) confirmarFrase(filaProv.texto); // lo que quedó en gris no se pierde
-  corte = { t: Date.now(), motivo: 'reinicio-preventivo' };
+  corte = { t: Date.now(), motivo };
   ponerEstado('reanudando');
   clearTimeout(tempReinicio);
   tempReinicio = setTimeout(() => {
@@ -727,7 +770,7 @@ function arrancarReconocimiento() {
   const Reconocimiento = window.SpeechRecognition || window.webkitSpeechRecognition;
   const este = new Reconocimiento();
   rec = este;
-  este.lang = el.selOrigen.value;
+  este.lang = reunion.origen;
   // En Android el modo continuo de Chrome repite el texto: se escucha frase a frase
   // y se vuelve a arrancar al terminar cada una.
   este.continuous = !esAndroid;
@@ -826,7 +869,7 @@ function arrancarReconocimiento() {
         }
         break;
       case 'language-not-supported':
-        pararPorFallo('Idioma no admitido', `El reconocimiento de voz no admite el idioma ${nombreOrigen()}. Elige otro y vuelve a pulsar Iniciar.`);
+        pararPorFallo('Idioma no admitido', `El reconocimiento de voz no admite el idioma ${nombreOrigen()}. Elige otro en la pantalla de inicio.`);
         break;
       case 'network':
         if (!inicioErrorRed) inicioErrorRed = Date.now();
@@ -948,21 +991,17 @@ document.addEventListener('visibilitychange', () => {
 // ---------- Copia de seguridad (localStorage) ----------
 
 function guardarCopia() {
-  if (!hayCambios || copiaPendiente) return;
+  if (!hayCambios || copiaPendiente || !reunion) return;
   const provisional = filaProv ? filaProv.texto : '';
   try {
-    if (segmentos.length || provisional) {
-      localStorage.setItem(CLAVE_COPIA, JSON.stringify({
-        inicio: inicioSesion,
-        guardada: new Date().toISOString(),
-        origen: el.selOrigen.value,
-        destino: el.selDestino.value,
-        segmentos,
-        provisional, // la frase que se estaba diciendo, aún en gris
-      }));
-    } else {
-      localStorage.removeItem(CLAVE_COPIA);
-    }
+    localStorage.setItem(CLAVE_COPIA, JSON.stringify({
+      version: 2,
+      guardada: new Date().toISOString(),
+      pantalla,
+      reunion,
+      segmentos,
+      provisional, // la frase que se estaba diciendo, aún en gris
+    }));
     hayCambios = false;
   } catch (e) {
     console.warn('No se pudo guardar la copia de seguridad:', e);
@@ -980,7 +1019,8 @@ function ofrecerRecuperacion() {
   const n = copia.segmentos.length + (copia.provisional ? 1 : 0);
   if (n === 0) return;
   copiaPendiente = copia;
-  const cuando = copia.inicio ? fechaTexto(new Date(copia.inicio)) : 'fecha desconocida';
+  const inicio = (copia.reunion && copia.reunion.inicio) || copia.inicio;
+  const cuando = inicio ? fechaTexto(new Date(inicio)) : 'fecha desconocida';
   el.recuperarTexto.textContent =
     `Hay una reunión sin terminar del ${cuando}, con ${n} ${n === 1 ? 'frase' : 'frases'}.`;
   el.recuperar.hidden = false;
@@ -992,13 +1032,18 @@ function recuperarCopia() {
   if (!copia) return;
   copiaPendiente = null;
   el.recuperar.hidden = true;
+  reunion = normalizarReunion(copia); // en inicio.js (admite también copias de la versión anterior)
+  const codigo = reunion.origen.split('-')[0];
   segmentos = copia.segmentos
     .filter((s) => s && typeof s.original === 'string')
     .map((s, i) => ({
+      ...s,
       id: i + 1,
-      hora: s.hora || copia.inicio || new Date().toISOString(),
+      hora: s.hora || reunion.inicio,
       original: s.original,
       traduccion: typeof s.traduccion === 'string' ? s.traduccion : null,
+      origen: s.origen || codigo,
+      destino: reunion.modo === 'traduccion' ? (s.destino || reunion.destino) : null,
     }));
   // La frase que se estaba diciendo cuando se cerró también se recupera.
   if (typeof copia.provisional === 'string' && copia.provisional.trim()) {
@@ -1007,17 +1052,16 @@ function recuperarCopia() {
       hora: copia.guardada || new Date().toISOString(),
       original: copia.provisional.trim(),
       traduccion: null,
+      origen: codigo,
+      destino: reunion.modo === 'traduccion' ? reunion.destino : null,
     });
   }
   siguienteId = segmentos.length + 1;
-  inicioSesion = copia.inicio || (segmentos[0] && segmentos[0].hora) || null;
-  if ([...el.selOrigen.options].some((o) => o.value === copia.origen)) el.selOrigen.value = copia.origen;
-  if ([...el.selDestino.options].some((o) => o.value === copia.destino)) el.selDestino.value = copia.destino;
   cola.length = 0;
+  ultimaFrase = { norm: '', t: 0 };
   hayCambios = true;
   pintarTodo();
-  actualizarControles();
-  prepararTraductor();
+  abrirReunion(copia.pantalla); // en inicio.js
   registrar(`Reunión anterior recuperada (${segmentos.length} frases).`);
 }
 
@@ -1030,10 +1074,12 @@ function descartarCopia() {
   registrar('Reunión anterior descartada.');
 }
 
-function borrarTodo() {
-  if (!confirm('Se borrará toda la transcripción de la pantalla y su copia de seguridad. ¿Continuar?')) return;
+// Cierra la reunión en curso, borra su copia de seguridad y vuelve al inicio.
+function cerrarReunion() {
+  if (quiereEscuchar) pararEscucha();
+  cerrarAlarma();
+  reunion = null;
   segmentos = [];
-  inicioSesion = null;
   siguienteId = 1;
   cola.length = 0;
   filasPorId.clear();
@@ -1042,43 +1088,41 @@ function borrarTodo() {
   el.filas.textContent = '';
   localStorage.removeItem(CLAVE_COPIA);
   hayCambios = false;
+  registrar('Reunión cerrada.');
+  mostrarPantalla('inicio'); // en inicio.js
   actualizarControles();
 }
 
 // ---------- Descarga en Markdown ----------
 
 function construirMarkdown() {
-  const inicio = new Date(inicioSesion || Date.now());
+  const inicio = new Date(reunion.inicio);
   const lineas = [
     '# Transcripción de reunión',
     '',
     `- **Fecha y hora:** ${fechaTexto(inicio)}`,
-    `- **Idiomas:** ${nombreOrigen()} (${el.selOrigen.value}) → ${nombreDestino()} (${el.selDestino.value})`,
+    esTraduccion()
+      ? `- **Modo:** Traducción · ${nombreOrigen()} → ${nombreDestino()}`
+      : `- **Modo:** Reunión · ${nombreOrigen()}`,
     `- **Frases:** ${segmentos.length}`,
     '',
     '---',
     '',
   ];
   segmentos.forEach((s, i) => {
-    lineas.push(
-      `### ${i + 1} · ${horaTexto(new Date(s.hora))}`,
-      '',
-      `**Original:** ${s.original}`,
-      '',
-      `**Traducción:** ${s.traduccion ?? '_(sin traducción)_'}`,
-      '',
-    );
+    lineas.push(`### ${i + 1} · ${horaTexto(new Date(s.hora))}`, '', `**Original:** ${s.original}`, '');
+    if (s.destino) lineas.push(`**Traducción:** ${s.traduccion ?? '_(sin traducción)_'}`, '');
   });
   return lineas.join('\n');
 }
 
 function nombreArchivo() {
-  const d = new Date(inicioSesion || Date.now());
+  const d = new Date(reunion.inicio);
   return `reunion_${d.getFullYear()}-${dos(d.getMonth() + 1)}-${dos(d.getDate())}_${dos(d.getHours())}-${dos(d.getMinutes())}.md`;
 }
 
 function descargarMarkdown() {
-  if (!segmentos.length) return;
+  if (!reunion || !segmentos.length) return;
   const url = URL.createObjectURL(new Blob([construirMarkdown()], { type: 'text/markdown;charset=utf-8' }));
   const enlace = document.createElement('a');
   enlace.href = url;
@@ -1095,36 +1139,52 @@ function descargarMarkdown() {
 function probarTexto() {
   const texto = el.textoPrueba.value.trim();
   if (!texto) return;
-  if (estadoTrad === 'descargable') prepararTraductor();
+  if (!reunion) return;
+  if (esTraduccion() && estadoTrad === 'descargable') prepararTraductor();
   const separador = new Intl.Segmenter(codigoOrigen(), { granularity: 'sentence' });
   for (const linea of texto.split(/\n+/)) {
     for (const trozo of separador.segment(linea)) confirmarFrase(trozo.segment, false);
   }
   el.filas.scrollTop = el.filas.scrollHeight;
+  el.textoPrueba.value = '';
+  el.dlgPrueba.close();
 }
 
 // ---------- Arranque ----------
 
 el.btnEscuchar.addEventListener('click', () => (quiereEscuchar ? pararEscucha() : iniciarEscucha()));
 el.btnPrepararTraductor.addEventListener('click', () => prepararTraductor(0, true));
-el.selOrigen.addEventListener('change', () => { actualizarControles(); prepararTraductor(); });
-el.selDestino.addEventListener('change', () => { actualizarControles(); prepararTraductor(); });
 el.btnDescargar.addEventListener('click', descargarMarkdown);
-el.btnBorrar.addEventListener('click', borrarTodo);
+el.btnNueva.addEventListener('click', () => {
+  if (segmentos.length && !confirm('Se cerrará esta reunión y se borrará de este aparato. Si quieres guardarla, descárgala antes. ¿Continuar?')) return;
+  cerrarReunion();
+});
 el.btnRecuperar.addEventListener('click', recuperarCopia);
 el.btnDescartar.addEventListener('click', descartarCopia);
 el.btnPrueba.addEventListener('click', probarTexto);
+$('btnAbrirPrueba').addEventListener('click', () => {
+  $('dlgMenu').close();
+  if (!reunion) {
+    alert('Primero empieza una reunión (Traducción o Reunión): el modo de prueba añade frases a esa reunión.');
+    return;
+  }
+  el.dlgPrueba.showModal();
+});
+$('btnCerrarPrueba').addEventListener('click', () => el.dlgPrueba.close());
 
 setInterval(guardarCopia, GUARDAR_CADA_MS);
 setInterval(vigilar, 500);
 window.addEventListener('pagehide', guardarCopia);
-registrar(`App abierta · versión ${VERSION_APP}.`);
 
-if (!(window.SpeechRecognition || window.webkitSpeechRecognition)) {
-  mostrarMensaje('Este navegador no tiene reconocimiento de voz: solo funcionará el modo de prueba. Usa Google Chrome.');
-} else if (!esChromeDeVerdad) {
-  mostrarMensaje(AVISO_NO_ES_CHROME);
-}
-ofrecerRecuperacion();
-pintarEscucha();
-prepararTraductor();
+// Cuando ya están cargados todos los archivos de la app:
+document.addEventListener('DOMContentLoaded', () => {
+  registrar(`App abierta · versión ${VERSION_APP}.`);
+  if (!(window.SpeechRecognition || window.webkitSpeechRecognition)) {
+    mostrarMensaje('Este navegador no tiene reconocimiento de voz: solo funcionará el modo de prueba. Usa Google Chrome.');
+  } else if (!esChromeDeVerdad) {
+    mostrarMensaje(AVISO_NO_ES_CHROME);
+  }
+  mostrarPantalla('inicio');
+  ofrecerRecuperacion();
+  actualizarControles();
+});

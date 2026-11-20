@@ -4,7 +4,7 @@
    y si se reanudó, para poder averiguar qué falla. Solo guarda datos técnicos (horas y
    motivos), nunca frases de la reunión. Se queda en este aparato. */
 
-const VERSION_APP = '1.1 · fase 1 (robustez)';
+const VERSION_APP = '1.2 · fase 2 (modos e idiomas)';
 const CLAVE_DIARIO = 'traductorReuniones.diagnostico';
 const MAX_DIARIO = 500; // entradas que se conservan (las más antiguas se van borrando)
 
@@ -61,7 +61,7 @@ function pintarDiario() {
   txtDiario.scrollTop = txtDiario.scrollHeight;
 }
 
-document.getElementById('btnMenu').addEventListener('click', () => dlgMenu.showModal());
+for (const b of document.querySelectorAll('.btn-menu')) b.addEventListener('click', () => dlgMenu.showModal());
 document.getElementById('btnCerrarMenu').addEventListener('click', () => dlgMenu.close());
 document.getElementById('versionApp').textContent = `Versión ${VERSION_APP}`;
 
